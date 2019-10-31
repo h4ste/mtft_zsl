@@ -14,20 +14,6 @@ from fslks.modelling import QAModel
 TASKS = {}
 
 
-def register_task(name: Sequence[str], task: Task, tree=None):
-    if not tree:
-        tree = TASKS
-
-    last = len(name) - 1
-    for i, segment in enumerate(name):
-        if segment not in tree:
-            if i == last:
-                tree[segment] = task
-            else:
-                tree[segment] = {}
-                tree = tree[segment]
-
-
 class Task(object, abc.ABC):
 
     def __init__(self,
@@ -106,3 +92,19 @@ class LanguageGenerationTask(Task):
         x = model.vocab_decoder(x)
         x = keras.layers.Dense(model.get_vocabulary())(x)
         return x
+
+
+def register_task(name: Sequence[str], task: Task, tree=None):
+    if not tree:
+        tree = TASKS
+
+    last = len(name) - 1
+    for i, segment in enumerate(name):
+        if segment not in tree:
+            if i == last:
+                tree[segment] = task
+            else:
+                tree[segment] = {}
+                tree = tree[segment]
+
+
