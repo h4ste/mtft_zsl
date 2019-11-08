@@ -1,16 +1,23 @@
+"""
+Script to run XLNet on glue task specified in script
+
+To run:
+python run_tf_glue_xlnet.py
+"""
+
 import os
 import tensorflow as tf
 import tensorflow_datasets
 from transformers import XLNetForSequenceClassification, TFXLNetForSequenceClassification, glue_convert_examples_to_features, XLNetTokenizer
 
 # script parameters
-BATCH_SIZE = 32
+BATCH_SIZE = 8
 EVAL_BATCH_SIZE = BATCH_SIZE * 2
 USE_XLA = False
 USE_AMP = False
 
-#tf.config.optimizer.set_jit(USE_XLA)
-#tf.config.optimizer.set_experimental_options({"auto_mixed_precision": USE_AMP})
+tf.config.optimizer.set_jit(USE_XLA)
+tf.config.optimizer.set_experimental_options({"auto_mixed_precision": USE_AMP})
 
 # Load tokenizer and model from pretrained model/vocabulary
 tokenizer = XLNetTokenizer.from_pretrained('xlnet-base-cased')
@@ -30,19 +37,8 @@ train_dataset = glue_convert_examples_to_features(
         task='mrpc',
         pad_on_left=True, # pad on the left for xlnet
         pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
-        pad_token_segment_id=4
+        pad_token_segment_id=4 # XLNet likes 4
         )
-
-        # features = convert_examples_to_features(examples,
-        #                                         tokenizer,
-        #                                         label_list=label_list,
-        #                                         max_length=args.max_seq_length,
-        #                                         output_mode=output_mode,
-        #                                         pad_on_left=bool(args.model_type in ['xlnet']),                 # pad on the left for xlnet
-        #                                         pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
-        #                                         pad_token_segment_id=4 if args.model_type in ['xlnet'] else 0,
-
-
 
 valid_dataset = glue_convert_examples_to_features(
         data['validation'],
@@ -52,7 +48,7 @@ valid_dataset = glue_convert_examples_to_features(
         task='mrpc',
         pad_on_left=True, # pad on the left for xlnet
         pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
-        pad_token_segment_id=4
+        pad_token_segment_id=4 # XLNet likes 4
         )
 train_dataset = train_dataset.shuffle(128).batch(BATCH_SIZE).repeat(-1)
 valid_dataset = valid_dataset.batch(EVAL_BATCH_SIZE)
