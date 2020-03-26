@@ -1,2 +1,2 @@
-"""Module for creating Evidence-based Medicine dataset"
+"""Module for creating Evidence-based Medicine dataset"""
 
