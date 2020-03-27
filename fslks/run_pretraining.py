@@ -18,13 +18,12 @@ from absl import app
 from absl import flags
 from absl import logging
 
-from fslks import sink
 # We need to import our custom TensorFlow DataSet Builders
 # noinspection PyUnresolvedReferences
-from fslks import tasks as _
+from fslks import sink, tasks
 
 FLAGS = flags.FLAGS
-flags.DEFINE_multi_string("tasks", None, "One or more tasks to be used for pretraining")
+flags.DEFINE_spaceseplist("tasks", None, "One or more tasks to be used for pretraining")
 
 flags.DEFINE_integer('num_epochs', 3, 'Number of epochs to train')
 flags.DEFINE_integer('batch_size', 32, 'Batch size to use for training')
@@ -36,6 +35,8 @@ flags.DEFINE_string('model_name', 'bert-base-cased', 'Name of pretrained transfo
 flags.DEFINE_string('checkpoint_file', None, 'Path to save checkpoints')
 flags.DEFINE_string('data_dir', None, 'Path to TensorFlow DataSet home (e.g., ~/tensorflow_datasets)')
 flags.DEFINE_string('cache_dir', None, 'Path to save TensorFlow DataSet cache files (e.g., /tmp)')
+flags.DEFINE_string('checksum_dir', '/data/LHC_kitchensink/tensorflow_datasets/url_checksums',
+                    help='Path to checksum directory')
 flags.DEFINE_integer('samples_per_epoch', 10_000, 'Number of samples to select to form each epoch')
 
 # The types of inputs provided to the Transformer
@@ -86,8 +87,17 @@ def load_all_data(tokenizer_name: str,
                   cache_dir: typing.Optional[str] = None) -> (tf.data.Dataset, tf.data.Dataset):
     logging.debug('Loading tokenizer from %s...', tokenizer_name)
     tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name)
+    encoder_fn = functools.partial(tokenizer.encode_plus,
+                                   add_special_tokens=False,
+                                   max_length=max_seq_len,
+                                   pad_to_max_length=True,
+                                   return_attention_mask=True,
+                                   truncation_strategy="only_first")
+    decoder_fn = functools.partial(tokenizer.decode, skip_special_tokens=True)
 
-    def load_task_data(task: str, split: tfds.core.splits.NamedSplit) -> (tf.data.Dataset, tf.data.Dataset):
+    logging.info('Preparing kitchen sink with %d tasks: %s', len(tasks), tasks)
+
+    def load_task_data(task: str, split: tfds.core.splits.NamedSplit, decode=False) -> (tf.data.Dataset, tf.data.Dataset):
         """ Loads the data for a given task
 
         :param task: Name of task to load
@@ -97,21 +107,14 @@ def load_all_data(tokenizer_name: str,
         logging.debug('Loading data for task %s', task)
         data: tf.data.Dataset = tfds.load(task, split=split, data_dir=data_dir)
 
-        encoder_fn = functools.partial(tokenizer.encode_plus,
-                                       add_special_tokens=False,
-                                       max_length=max_seq_len,
-                                       pad_to_max_length=True,
-                                       return_attention_mask=True,
-                                       truncation_strategy="only_first")
-
         # Load the converter for this task registered to the kitchen sink
-        task_converter = sink.get_converter(task)(encoder_fn)
+        task_converter = sink.get_converter(task)(encoder_fn, decoder_fn if decode else None)
 
         logging.debug('Encoding %s[%s] (size = %s) to format required by Transformer...',
                       task, split, tf.data.experimental.cardinality(data).numpy())
 
         return tf.data.Dataset.from_generator(
-            lambda: tqdm.tqdm(map(task_converter, data), desc='tokenizing'),
+            lambda: tqdm.tqdm(map(task_converter, enumerate(data)), desc='tokenizing'),
             output_types=(INPUT_TYPES, OUTPUT_TYPE),
             output_shapes=({
                                "input_ids": tf.TensorShape([None]),
@@ -125,22 +128,42 @@ def load_all_data(tokenizer_name: str,
     # and sample a task for each batch.
     choices = tf.data.Dataset.range(len(tasks)).repeat(samples_per_epoch // batch_size).shuffle(128)
 
+    tfds.download.add_checksums_dir(FLAGS.checksum_dir)
+
     def load_train_fn(task):
-        dataset = load_task_data(task, tfds.Split.TRAIN).cache().shuffle(128).batch(batch_size).repeat()
-        return dataset  # tfds.as_numpy(dataset)
+        dataset = load_task_data(task, tfds.Split.TRAIN, decode=True)\
+            .cache()\
+            .shuffle(128)\
+            .batch(batch_size)\
+            .repeat()
+        return dataset
 
     logging.debug('Loading training data...')
     training_data = list(map(load_train_fn, tasks))
     training_data = tf.data.experimental.choose_from_datasets(training_data, choices).prefetch(prefetch_size)
 
     def load_validation_fn(task):
-        dataset = load_task_data(task, tfds.Split.VALIDATION).take(eval_batch_size).batch(eval_batch_size)
-        return dataset  # tfds.as_numpy(dataset)
+        try:
+            return load_task_data(task, tfds.Split.VALIDATION)\
+                .take(eval_batch_size)\
+                .batch(eval_batch_size)
+        except ValueError as e:
+            if str(e).startswith('Unknown split "validation"'):
+                # This is a ValueError indicating there is no validation split, so return nothing
+                logging.warning('Task %s has no validation split, so it will not be used for validation.', task)
+                return None
+            else:
+                # This is some other ValueError and we should probably crash
+                raise e
 
     logging.debug('Loading validation data...')
-    validation_data = list(map(load_validation_fn, tasks))
-    validation_prefetch = min(len(tasks), prefetch_size)
-    validation_data = tf.data.experimental.choose_from_datasets(validation_data, choices).prefetch(validation_prefetch)
+
+    validation_data = [data for data in map(load_validation_fn, tasks) if data is not None]
+    num_validation_tasks = len(validation_data)
+    validation_data = tf.data.experimental.choose_from_datasets(
+        datasets=validation_data,
+        choice_dataset=tf.data.Dataset.range(num_validation_tasks))\
+        .prefetch(min(num_validation_tasks, prefetch_size))
 
     return training_data, validation_data
 

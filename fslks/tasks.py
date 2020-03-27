@@ -1,5 +1,11 @@
 from fslks import sink
 
+# noinspection PyUnresolvedReferences
+from fslks.datasets.summarization import *
+
+# noinspection PyUnresolvedReferences
+from fslks.datasets.argumentation import *
+
 sink.register('bioasq',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
@@ -42,15 +48,15 @@ _eviconv_stance_mapping = sink.LabelMapping('stance', {
     0: sink.Constant('PRO :'),
     1: sink.Constant('CON :'),
 })
-sink.register('eviconv',
-              prompt='argue',
+sink.register('evi_conv',
+              prompt=sink.Constant('argue'),
               input=sink.Sequence([
                   sink.DictEntry('evidence_1', _eviconv_stance_mapping),
                   sink.DictEntry('evidence_1', sink.Feature('text')),
                   sink.DictEntry('evidence_2', _eviconv_stance_mapping),
                   sink.DictEntry('evidence_2', sink.Feature('text')),
               ]),
-              output=sink.LabelMapping('_LABEL', {
+              output=sink.LabelMapping('label', {
                   0: sink.DictEntry('evidence_1', sink.Feature('text')),
                   1: sink.DictEntry('evidence_2', sink.Feature('text'))
               }))
