@@ -91,7 +91,7 @@ _EVIDENCE_ARTICLE_URL = "wikipedia_article_url"
 _LABEL = "label"
 _ACCEPTANCE_RATE = "acceptance_rate"
 
-_URL = "https://www.research.ibm.com/haifa/dept/vst/files/IBM_Debater_(R)_EviConv-ACL-2019.v1.zip",
+_DOWNLOAD_URL = "https://www.research.ibm.com/haifa/dept/vst/files/IBM_Debater_(R)_EviConv-ACL-2019.v1.zip"
 
 
 class EviConv(tfds.core.GeneratorBasedBuilder):
@@ -117,24 +117,25 @@ class EviConv(tfds.core.GeneratorBasedBuilder):
                     _EVIDENCE_ARTICLE_URL: tfds.features.Text()
                 }),
                 _LABEL: tfds.features.ClassLabel(num_classes=2),
-                _ACCEPTANCE_RATE: tfds.features.Tensor(shape=(), dtype=tf.float32)
+                _ACCEPTANCE_RATE: tf.float32,
             }),
-            supervised_keys=(_TOPIC, _EVIDENCE_1, _EVIDENCE_2, _LABEL),
-            urls=["https://www.research.ibm.com/haifa/dept/vst/debating_data.shtml"],
+            supervised_keys=None,
+            homepage="https://www.research.ibm.com/haifa/dept/vst/debating_data.shtml",
             citation=_CITATION,
         )
 
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
-        path = dl_manager.download_and_extract(_URL)
+        dl_dir = dl_manager.download_and_extract(_DOWNLOAD_URL)
+        dl_dir = os.path.join(dl_dir, r'IBM_Debater_(R)_EviConv-ACL-2019.v1')
         return [
             tfds.core.SplitGenerator(
                 name=tfds.Split.TRAIN,
-                gen_kwargs={"path": os.path.join(path, "train.csv")},
+                gen_kwargs={"path": os.path.join(dl_dir, "train.csv")},
             ),
             tfds.core.SplitGenerator(
                 name=tfds.Split.TEST,
-                gen_kwargs={"path": os.path.join(path, "test.csv")},
+                gen_kwargs={"path": os.path.join(dl_dir, "test.csv")},
             ),
         ]
 
@@ -156,6 +157,6 @@ class EviConv(tfds.core.GeneratorBasedBuilder):
                         _EVIDENCE_ARTICLE_NAME: row['evidence_2_wikipedia_article_name'],
                         _EVIDENCE_ARTICLE_URL: row['evidence_2_wikipedia_url']
                     },
-                    _LABEL: int(row['label']),
+                    _LABEL: int(row['label']) - 1,
                     _ACCEPTANCE_RATE: float(row['acceptance_rate'])
                 }
