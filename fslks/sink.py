@@ -13,6 +13,16 @@ SEP = ' '
 PROMPT_END = ' :'
 
 
+class LabelError(Exception):
+
+    def __init__(self, message: str = None):
+        super().__init__()
+        self._message = message
+
+    def __str__(self):
+        return self._message
+
+
 class Input(abc.ABC):
 
     def validate(self, info: tfds.core.DatasetInfo) -> None:
@@ -138,14 +148,17 @@ def register(dataset_name: str, prompt: Input, input: Input, output: Input):
             except TypeError as e:
                 prompt_str = prompt.to_str(elem)
                 input_str = input.to_str(elem)
-                raise ('In dataset %s:\nPrompt returned %s: %s\nInput returned %s: %s\n%s' % (
+                raise ValueError('In dataset %s:\nPrompt returned %s: %s\nInput returned %s: %s\n%s' % (
                     dataset_name,
                     type(prompt_str), prompt_str,
                     type(input_str), input_str,
                     e
                 ))
 
-            outputs = encoder_fn(output.to_str(elem))['input_ids']
+            try:
+                outputs = encoder_fn(output.to_str(elem))['input_ids']
+            except tf.errors.UnknownError:
+                raise LabelError()
             if idx == 0 and decoder_fn is not None:
                 logging.info('Task %s Example %d Input: %s', dataset_name, idx + 1, decoder_fn(ex['input_ids']))
                 # logging.debug('Task %s Example %d Input Features: %s', dataset_name, idx + 1, ex)
