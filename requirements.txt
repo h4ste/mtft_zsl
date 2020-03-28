@@ -7,3 +7,4 @@ tensorflow < 3.0, >= 2.1.0
 transformers <3.0, >= 2.5.0
 tensorflow-addons >= .8.3
 tensorflow-datasets >= 2.1.0
+tabulate
