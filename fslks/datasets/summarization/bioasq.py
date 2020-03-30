@@ -1,8 +1,8 @@
 """
 Module to create BioASQ tensorflow dataset. 
 """
-import csv
 import os
+import json
 
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
@@ -11,14 +11,18 @@ _DESCRIPTION = """BioASQ dataset for summarization, available at http://bioasq.o
 
 _CITATION = """This work is 100% plagiarized"""
 
+_BIOASQ_DOWNLOAD_INSTRUCTIONS = """OOH MAGIC"""
 
-class BioASQ(tfds.core.GeneratorBasedBuilder):
+
+class Bioasq(tfds.core.GeneratorBasedBuilder):
     """BioASQ dataset builder"""
 
     VERSION = tfds.core.Version("1.0.0")
+    MANUAL_DOWNLOAD_INSTRUCTIONS = _BIOASQ_DOWNLOAD_INSTRUCTIONS
 
-    def __init__(self, single_document):
+    def __init__(self, single_document=True, config=None, version=None, data_dir=None):
         self.single_document = single_document
+        super().__init__(data_dir=data_dir, config=config, version=version)
 
     def _info(self):
         return tfds.core.DatasetInfo(
@@ -47,15 +51,17 @@ class BioASQ(tfds.core.GeneratorBasedBuilder):
                     "path": os.path.join(path, "bioasq_collection.json")}),
         ]
 
-    def _generate_examples(self, path):
+    def _generate_examples(self, path=None):
         """Parse and yield bioasq_collection.json for single and multi-document summarization"""
         with tf.io.gfile.GFile(path) as f:
             bioasq_data = json.load(f)
-            for i, example in enumerate(bioasq_data):
-                question = example['question']
-                for snippet in example['snippets']:
+            example_cnt = 0
+            for example in bioasq_data:
+                question = bioasq_data[example]['question']
+                for snippet in bioasq_data[example]['snippets']:
+                    example_cnt += 1
                     if self.single_document:
-                        yield i, {
+                        yield example_cnt, {
                             'article': snippet['article'],
                             'summary': snippet['snippet'],
                             'question': question,
