@@ -12,14 +12,13 @@ _DESCRIPTION = """PubMed Publisher-Summary dataset, generated using 2020 PubMed 
 
 _CITATION = """This work is 100% plagiarized"""
 
+_PUBMED_DOWNLOAD_INSTRUCTIONS = """Do stuff here. Or don't. Who cares."""
 
 class PubMedSumm(tfds.core.GeneratorBasedBuilder):
     """PubMed Publisher-Summary dataset builder"""
 
     VERSION = tfds.core.Version("1.0.0")
-
-    def __init__(self):
-        self.single_document = single_document
+    MANUAL_DOWNLOAD_INSTRUCTIONS = _PUBMED_DOWNLOAD_INSTRUCTIONS
 
     def _info(self):
         return tfds.core.DatasetInfo(
@@ -27,6 +26,7 @@ class PubMedSumm(tfds.core.GeneratorBasedBuilder):
             description=_DESCRIPTION,
             features=tfds.features.FeaturesDict({
                 'article': tfds.features.Text(),
+                'title': tfds.features.Text(), 
                 'summary': tfds.features.Text(),
                 'pubdate': tfds.features.Text(),
                 'pmid': tfds.features.Text(),
@@ -37,32 +37,25 @@ class PubMedSumm(tfds.core.GeneratorBasedBuilder):
 
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
-        # Not sure if this will work
         path = dl_manager.manual_dir
-        # No BioASQ split. To make split on the fly see  
+        # To make split on the fly see  
         # https://github.com/tensorflow/datasets/blob/master/docs/splits.md
-        # Have to figure out how to get all data into one file?
         return [
             tfds.core.SplitGenerator(
                 name=tfds.Split.TRAIN,
                 gen_kwargs={
-                    "path": os.path.join(path, "bioasq_collection.json")}),
+                    "path": os.path.join(path, "pubmed_publisher_summ_collection.json")}),
         ]
 
     def _generate_examples(self, path):
-        """Parse and yield bioasq_collection.json for single and multi-document summarization"""
+        """Parse and yield pubmed_publisher_summ_collection.json for single document summarization"""
         with tf.io.gfile.GFile(path) as f:
-            bioasq_data = json.load(f)
-            for i, example in enumerate(bioasq_data):
-                question = example['question']
-                for snippet in example['snippets']:
-                    if self.single_document:
-                        yield i, {
-                            'article': snippet['article'],
-                            'summary': snippet['snippet'],
-                            'question': question,
-                            'pmid': snippet['pmid'],
-                        }
-                    else:
-                        # Might want to do this processing later on
-                        raise NotImplementedError
+            data = json.load(f)
+            for i, pmid in enumerate(data):
+                yield i, {
+                    'article': data[pmid]['abstract'],
+                    'title': data[pmid]['title'],
+                    'summary': data[pmid]['summary'],
+                    'pubdate': data[pmid]['pubdate'],
+                    'pmid': pmid,
+                }
