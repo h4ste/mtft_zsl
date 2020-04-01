@@ -30,8 +30,10 @@ FLAGS = flags.FLAGS
 flags.DEFINE_spaceseplist("tasks", None, "One or more tasks to be used for pretraining")
 
 flags.DEFINE_integer('num_epochs', 3, 'Number of epochs to train')
-flags.DEFINE_integer('batch_size', 32, 'Batch size to use for training')
-flags.DEFINE_integer('eval_batch_size', 64, 'Batch size to use when evaluating validation/test sets')
+flags.DEFINE_integer('warmup_epochs', 3, 'Number of epochs to train')
+flags.DEFINE_integer('batch_size', 128, 'Batch size to use for training')
+flags.DEFINE_integer('eval_batch_size', 128, 'Batch size to use when evaluating validation/test sets')
+flags.DEFINE_integer('eval_batches', 100, 'Number of batches to evaluate when testing')
 flags.DEFINE_boolean('use_xla', False, 'Enable XLA optimization')
 flags.DEFINE_boolean('use_amp', False, 'Enable AMP optimization')
 flags.DEFINE_integer('max_seq_len', 128, 'Maximum sequence length')
@@ -53,6 +55,14 @@ INPUT_TYPES: typing.Mapping[str, tf.dtypes.DType] = {
 # Type type of output expected from the Transformer
 OUTPUT_TYPE: tf.dtypes.DType = tf.int32
 
+# Type of sample weights
+SAMPLE_WEIGHT_TYPE: tf.dtypes.DType = tf.float32
+
+# Type aliases for Predictions table
+TaskSplitPredictions = typing.MutableMapping[str, typing.Union[typing.Sequence[str], np.ndarray]]
+TaskPredictions = typing.MutableMapping[tfds.Split, TaskSplitPredictions]
+Predictions = typing.MutableMapping[str, TaskPredictions]
+
 
 def configure_tf(use_xla: bool = False,
                  use_amp: bool = False) -> None:
@@ -65,7 +75,14 @@ def configure_tf(use_xla: bool = False,
 def load_model(model_name: str) -> keras.Model:
     model_name = model_name
     logging.info('Loading pre-trained TF model from %s', model_name)
-    model = transformers.TFAutoModelWithLMHead.from_pretrained(model_name)
+
+    model: tf.keras.Model
+    if model_name.startswith('t5'):
+        # HuggingFace named T5's sequence generator "ConditionalGeneration" rather than "LanguageModeling"
+        # like the others, so we need to load it separately.
+        model = transformers.TFT5ForConditionalGeneration.from_pretrained(model_name)
+    else:
+        model = transformers.TFAutoModelWithLMHead.from_pretrained(model_name)
 
     opt = tfa.optimizers.LazyAdam(learning_rate=3e-5, epsilon=1e-08)
 
@@ -73,10 +90,10 @@ def load_model(model_name: str) -> keras.Model:
         logging.debug('Enabling loss scaling')
         opt = keras.mixed_precision.experimental.LossScaleOptimizer(opt, 'dynamic')
 
-    loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    loss = keras.losses.SparseCategoricalCrossentropy(name='loss', reduction=keras.losses.Reduction.SUM)
     metric = keras.metrics.SparseCategoricalAccuracy('accuracy')
 
-    model.compile(optimizer=opt, loss=loss, metrics=[metric])
+    model.compile(optimizer=opt, loss=loss, weighted_metrics=[metric], sample_weight_mode='temporal')
 
     return model
 
@@ -92,9 +109,6 @@ def concatenate(datasets: typing.Iterable[tf.data.Dataset]):
         joint_dataset = joint_dataset.concatenate(dataset)
 
     return joint_dataset
-
-
-TQDM_BARS = {}
 
 
 class Experiment(object):
@@ -119,7 +133,7 @@ class Experiment(object):
 
         tfds.download.add_checksums_dir(FLAGS.checksum_dir)
 
-    def load_task_data(self, task: str, split: tfds.core.splits.NamedSplit, decode=False) -> (
+    def load_task_data(self, task: str, split: tfds.Split, decode=False) -> (
             tf.data.Dataset, tf.data.Dataset):
         """ Loads the data for a given task
 
@@ -136,17 +150,17 @@ class Experiment(object):
         # Load the converter for this task registered to the kitchen sink
         task_converter = sink.get_converter(task)(self.encoder_fn, self.decoder_fn if decode else None)
 
-        logging.debug('Encoding %s[%s] (size = %s) to format required by Transformer...',
-                      task, split, tf.data.experimental.cardinality(data).numpy())
-
+        logging.debug('Encoding %s[%s] to format required by Transformer...', task, split)
         return tf.data.Dataset.from_generator(
             lambda: map(task_converter, enumerate(data)),
-            output_types=(INPUT_TYPES, OUTPUT_TYPE),
+            output_types=(INPUT_TYPES, OUTPUT_TYPE, SAMPLE_WEIGHT_TYPE),
             output_shapes=({
                                "input_ids": tf.TensorShape([None]),
                                "attention_mask": tf.TensorShape([None]),
                                "token_type_ids": tf.TensorShape([None])
-                           }, tf.TensorShape([None]))
+                           },
+                           tf.TensorShape([None, 1]),
+                           tf.TensorShape([None]))
         )
 
     def load_train_data(self, tasks, batch_size):
@@ -156,7 +170,7 @@ class Experiment(object):
             dataset = self.load_task_data(task, tfds.Split.TRAIN, decode=True) \
                 .cache() \
                 .shuffle(128) \
-                .batch(batch_size) \
+                .batch(batch_size, drop_remainder=True) \
                 .repeat()
             training_data.append(dataset)
 
@@ -168,14 +182,14 @@ class Experiment(object):
             .prefetch(self.prefetch_size)
         return training_data
 
-    def load_valid_data(self, tasks, batch_size):
+    def load_valid_data(self, tasks, batch_size, num_batches=None):
         logging.debug('Loading validation data...')
         validation_data = []
         for task in tasks:
             try:
-                task_data = self.load_task_data(task, tfds.Split.VALIDATION) \
-                    .batch(batch_size)
-            #                    .take(batch_size) \
+                task_data = self.load_task_data(task, tfds.Split.VALIDATION).batch(batch_size, drop_remainder=True)
+                if num_batches:
+                    task_data = task_data.take(num_batches)
             except ValueError as e:
                 if str(e).startswith('Unknown split "validation"'):
                     # This is a ValueError indicating there is no validation split, so return nothing
@@ -192,7 +206,12 @@ class Experiment(object):
               model: keras.Model,
               tasks: typing.List[str],
               num_epochs: int,
-              batch_size: int, eval_batch_size: int, samples_per_epoch: int,
+              batch_size: int,
+              samples_per_epoch: int,
+              hidden_size: typing.Optional[int] = None,
+              warmup_epochs: typing.Optional[int] = None,
+              eval_batch_size: typing.Optional[int] = None,
+              eval_batches: typing.Optional[int] = None,
               checkpoint_file: typing.Optional[str] = None) -> tf.keras.callbacks.History:
         logging.info('Preparing kitchen sink with %d tasks: %s', len(tasks), tasks)
 
@@ -200,7 +219,8 @@ class Experiment(object):
         callbacks = [keras.callbacks.EarlyStopping(monitor='val_accuracy',
                                                    patience=5,
                                                    mode=max,
-                                                   restore_best_weights=True)]
+                                                   restore_best_weights=True),
+                     keras.callbacks.TerminateOnNaN()]
 
         # If requested, save model checkpoints
         if FLAGS.checkpoint_file:
@@ -208,10 +228,27 @@ class Experiment(object):
             callbacks.append(keras.callbacks.ModelCheckpoint(filepath=checkpoint_file,
                                                              monitor='val_accuracy',
                                                              save_best_only=True))
+
+        if hidden_size:
+            warmup_epochs = warmup_epochs or 1
+            num_epochs += warmup_epochs
+
+            def lr_schedule(epoch):
+                return 5000.0 * hidden_size ** -0.5 * tf.minimum(
+                    (epoch + 1) * warmup_epochs ** -1.5, (epoch + 1) ** -0.5)
+
+            callbacks.append(keras.callbacks.LearningRateScheduler(lr_schedule))
+
         # Train the model & return its training history
         logging.info('Beginning training...')
-        history = model.fit(x=self.load_train_data(tasks, batch_size=batch_size),
-                            validation_data=self.load_valid_data(tasks, batch_size=eval_batch_size),
+        training_data = self.load_train_data(tasks, batch_size=batch_size)
+        logging.info('data=%s', training_data)
+        validation_data = self.load_valid_data(tasks,
+                                               batch_size=eval_batch_size or batch_size,
+                                               num_batches=eval_batches)
+        logging.info('validation=%s', validation_data)
+        history = model.fit(x=training_data,
+                            validation_data=validation_data,
                             epochs=num_epochs,
                             verbose=1,
                             steps_per_epoch=samples_per_epoch // batch_size,
@@ -219,51 +256,95 @@ class Experiment(object):
 
         return history
 
-    def evaluate(self, model: tf.keras.Model, tasks: typing.List[str], eval_batch_size: int, eval_batches: int,
-                 splits):
-        headers = ['Task', 'Split', 'W. Acc.', 'BLEU', 'ROUGE-1', 'ROUGE-2', 'ROUGE-L']
-        results = []
-
-        NA = 'n/a'
-        for split in splits:
-            for task in tasks:
+    def predict(self,
+                model: tf.keras.Model,
+                tasks: typing.List[str],
+                splits: typing.Iterable[tfds.Split],
+                eval_batch_size: int,
+                eval_batches: typing.Optional[int] = None) -> Predictions:
+        predictions: Predictions = {}
+        for task in tasks:
+            for split in splits:
                 try:
-                    task_data = self.load_task_data(task, split=split).batch(eval_batch_size)#.take(eval_batches)
+                    task_data = self.load_task_data(task, split=split).batch(eval_batch_size, drop_remainder=False)
                 except ValueError as e:
                     if str(e).startswith('Unknown split'):
                         # This is a ValueError indicating there is no validation split, so return nothing
                         logging.warning('Task %s has no %s split, so it will not be evaluated.',
                                         task, split)
-                        results.append([task, split] + [NA] * 5)
                         continue
                     else:
                         # This is some other ValueError so we should probably crash
                         raise e
 
+                if eval_batches:
+                    task_data = task_data.take(eval_batches)
+
                 logging.info('Evaluating %s on %s', task, split)
-                inputs = task_data.map(lambda inputs_, targets_: inputs_)
+                inputs = task_data.map(lambda inputs_, targets_, sample_weights: inputs_)
+
                 try:
                     logits = model.predict(inputs, verbose=1)
-                except tf.errors.UnknownError:
-                    logging.warning('Task %s has no labels for split %s, so it will not be evaluated.',
-                                    task, split)
-                    results.append([task, split] + [NA] * 5)
-                    continue
-                predictions = np.argmax(logits, axis=-1)
-                logging.info("Task %s Split %s Example 1 Predictions: %s", task, split, self.decoder_fn(predictions[0]))
+                # We can't just except tf.errors.UnknownError, because it is thrown as some sort of weird proxy
+                # instance of a tf.errors.UnknownError and python's pattern matching can't handle the scandal
+                except Exception as e:
+                    if isinstance(e, tf.errors.UnknownError):
+                        # Unfortunately, we don't get a more helpful error type, but this usually means
+                        # that the task has no labels for a given split (e.g., test evaluation occurs on a server)
+                        logging.warning('Task %s has no labels for split %s, so it will not be evaluated.',
+                                        task, split)
+                        continue
+                    else:
+                        # We got a different exception type so let python freak out accordingly
+                        logging.warning('Encountered error: %s, %s', type(e), e)
+                        raise e
 
-                targets = np.asarray(*tfds.as_numpy(task_data.map(lambda inputs_, targets_: targets_)))
+                outputs = np.argmax(logits, axis=-1)
+                logging.info('Logits Shape=%s; Logits=%s', logits.shape, logits)
+                logging.info('Outputs Shape=%s; Outputs=%s', outputs.shape, outputs)
+                logging.info("Task %s Split %s Example 1 Predictions: %s", task, split, self.decoder_fn(outputs[0]))
+
+                targets = task_data.map(lambda inputs_, targets_, sample_weights: targets_).as_numpy_iterator()
+                targets = np.concatenate(list(targets), axis=0)
+                targets = np.squeeze(targets)
                 logging.info("Task %s Split %s Example 1 Targets: %s", task, split, self.decoder_fn(targets[0]))
 
-                w_acc = eval.word_accuracy(targets, predictions)
-                bleus = eval.bleu(targets, predictions)
-                rouges = eval.rouge(targets, predictions)
-                results.append([task, split,
-                                w_acc,
-                                bleus[0] * 100.,
-                                rouges['rouge_1/f_score'] * 100.,
-                                rouges['rouge_2/f_score'] * 100.,
-                                rouges['rouge_l/f_score'] * 100.])
+                if task not in predictions:
+                    predictions[task]: TaskPredictions = {}
+
+                predictions[task][split] = {
+                    'pred_logits': logits,
+                    'pred_token_ids': outputs,
+                    'pred_tokens': list(map(self.decoder_fn, outputs)),
+                    'target_token_ids': targets,
+                    'target_tokens': list(map(self.decoder_fn, targets))
+                }
+        return predictions
+
+    def evaluate(self, predictions: Predictions) -> str:
+        headers = ['Task', 'Split', 'W. Acc.', 'BLEU', 'ROUGE-1', 'ROUGE-2', 'ROUGE-L']
+        results = []
+
+        for task, task_predictions in predictions.items():
+            for split, split_predictions in task_predictions.items():
+                targets = split_predictions['target_tokens']
+                predictions_ = split_predictions['pred_tokens']
+                try:
+                    logging.debug('Evaluating %s[%s] W. Acc...', task, split)
+                    w_acc = eval.word_accuracy(targets, predictions_)
+                    logging.debug('Evaluating %s[%s] BLEU...', task, split)
+                    bleus = eval.bleu(targets, predictions_)
+                    logging.debug('Evaluating %s[%s] ROUGE...', task, split)
+                    rouges = eval.rouge(targets, predictions_)
+                    results.append([task, split,
+                                    w_acc,
+                                    bleus[0] * 100.,
+                                    rouges['rouge_1/f_score'] * 100.,
+                                    rouges['rouge_2/f_score'] * 100.,
+                                    rouges['rouge_l/f_score'] * 100.])
+                except ZeroDivisionError as e:
+                    logging.warning('Division by zero when evaluating %s[%s]', task, split)
+                    results.append([task, split, 0., 0., 0., 0., 0.])
 
         return tabulate(results, headers=headers)
 
@@ -283,24 +364,39 @@ def main(argv):
     # Load model
     model = load_model(model_name=FLAGS.model_name)
 
+    if isinstance(model, transformers.TFPreTrainedModel):
+        model: transformers.TFPreTrainedModel
+        hidden_size = model.num_parameters(True)
+    else:
+        raise NotImplementedError('Determining hidden_size is only support for huggingface TF models.')
+
     # Train model
+    logging.info('Training %s with %s...', FLAGS.model_name, ' '.join(FLAGS.tasks))
     history = experiment.train(model,
                                tasks=FLAGS.tasks,
                                num_epochs=FLAGS.num_epochs,
+                               warmup_epochs=FLAGS.warmup_epochs,
                                samples_per_epoch=FLAGS.samples_per_epoch,
                                batch_size=FLAGS.batch_size,
                                eval_batch_size=FLAGS.eval_batch_size,
-                               checkpoint_file=FLAGS.checkpoint_file)
+                               eval_batches=FLAGS.eval_batches,
+                               checkpoint_file=FLAGS.checkpoint_file,
+                               hidden_size=hidden_size)
+
     # Print final results
     for metric, value in history.history.items():
         print(metric, '=', value)
 
     # Evaluate the model
-    results = experiment.evaluate(model,
-                                  tasks=FLAGS.tasks,
-                                  eval_batch_size=FLAGS.eval_batch_size,
-                                  eval_batches=1,
-                                  splits=[tfds.Split.TRAIN, tfds.Split.VALIDATION, tfds.Split.TEST])
+    logging.info('Evaluating %s with %s...', FLAGS.model_name, ' '.join(FLAGS.tasks))
+    predictions = experiment.predict(model,
+                                     tasks=FLAGS.tasks,
+                                     eval_batch_size=FLAGS.eval_batch_size,
+                                     eval_batches=FLAGS.eval_batches,
+                                     splits=[tfds.Split.TRAIN, tfds.Split.VALIDATION, tfds.Split.TEST])
+
+    logging.info('Results:')
+    results = experiment.evaluate(predictions)
 
     print(results)
 

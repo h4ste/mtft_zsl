@@ -26,7 +26,7 @@ def _get_ngrams(n, text):
 
 
 def _split_into_words(sentences):
-    return [word for sentence in sentences for word in sentence]
+    return [word for word in sentences]
 
 
 def _get_word_ngrams(n, sentences):

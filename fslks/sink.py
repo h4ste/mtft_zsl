@@ -1,6 +1,7 @@
 import abc
 import typing
 
+import numpy as np
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
 from absl import logging
@@ -157,13 +158,16 @@ def register(dataset_name: str, prompt: Input, input: Input, output: Input):
 
             try:
                 outputs = encoder_fn(output.to_str(elem))['input_ids']
+                outputs = np.expand_dims(outputs, -1)
             except tf.errors.UnknownError:
                 raise LabelError()
             if idx == 0 and decoder_fn is not None:
                 logging.info('Task %s Example %d Input: %s', dataset_name, idx + 1, decoder_fn(ex['input_ids']))
                 # logging.debug('Task %s Example %d Input Features: %s', dataset_name, idx + 1, ex)
                 logging.info('Task %s Example %d Output: %s', dataset_name, idx + 1, decoder_fn(outputs))
-            return ex, outputs
+
+            sample_weight = ex['attention_mask']
+            return ex, outputs, sample_weight
 
         return conversion_fn
 
