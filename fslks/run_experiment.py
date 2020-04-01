@@ -30,7 +30,6 @@ FLAGS = flags.FLAGS
 flags.DEFINE_spaceseplist("tasks", None, "One or more tasks to be used for pretraining")
 
 flags.DEFINE_integer('num_epochs', 3, 'Number of epochs to train')
-flags.DEFINE_integer('warmup_epochs', 3, 'Number of epochs to train')
 flags.DEFINE_integer('batch_size', 128, 'Batch size to use for training')
 flags.DEFINE_integer('eval_batch_size', 128, 'Batch size to use when evaluating validation/test sets')
 flags.DEFINE_integer('eval_batches', 100, 'Number of batches to evaluate when testing')
@@ -76,24 +75,13 @@ def load_model(model_name: str) -> keras.Model:
     model_name = model_name
     logging.info('Loading pre-trained TF model from %s', model_name)
 
-    model: tf.keras.Model
+    model: keras.Model
     if model_name.startswith('t5'):
         # HuggingFace named T5's sequence generator "ConditionalGeneration" rather than "LanguageModeling"
         # like the others, so we need to load it separately.
         model = transformers.TFT5ForConditionalGeneration.from_pretrained(model_name)
     else:
         model = transformers.TFAutoModelWithLMHead.from_pretrained(model_name)
-
-    opt = tfa.optimizers.LazyAdam(learning_rate=3e-5, epsilon=1e-08)
-
-    if tf.config.optimizer.get_jit():
-        logging.debug('Enabling loss scaling')
-        opt = keras.mixed_precision.experimental.LossScaleOptimizer(opt, 'dynamic')
-
-    loss = keras.losses.SparseCategoricalCrossentropy(name='loss', reduction=keras.losses.Reduction.SUM)
-    metric = keras.metrics.SparseCategoricalAccuracy('accuracy')
-
-    model.compile(optimizer=opt, loss=loss, weighted_metrics=[metric], sample_weight_mode='temporal')
 
     return model
 
@@ -122,9 +110,12 @@ class Experiment(object):
         self.prefetch_size = prefetch_size
 
         logging.debug('Loading tokenizer from %s...', tokenizer_name)
-        tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name)
+        tokenizer: transformers.PreTrainedTokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name)
+        if not tokenizer.pad_token:
+            tokenizer.pad_token = 0
         self.encoder_fn = functools.partial(tokenizer.encode_plus,
                                             add_special_tokens=False,
+                                            add_space_before_punct_symbol=True,
                                             max_length=max_seq_len,
                                             pad_to_max_length=True,
                                             return_attention_mask=True,
@@ -133,8 +124,7 @@ class Experiment(object):
 
         tfds.download.add_checksums_dir(FLAGS.checksum_dir)
 
-    def load_task_data(self, task: str, split: tfds.Split, decode=False) -> (
-            tf.data.Dataset, tf.data.Dataset):
+    def load_task_data(self, task: str, split: tfds.Split, decode=False) -> tf.data.Dataset:
         """ Loads the data for a given task
 
         :param task: Name of task to load
@@ -208,19 +198,19 @@ class Experiment(object):
               num_epochs: int,
               batch_size: int,
               samples_per_epoch: int,
-              hidden_size: typing.Optional[int] = None,
-              warmup_epochs: typing.Optional[int] = None,
               eval_batch_size: typing.Optional[int] = None,
               eval_batches: typing.Optional[int] = None,
-              checkpoint_file: typing.Optional[str] = None) -> tf.keras.callbacks.History:
+              checkpoint_file: typing.Optional[str] = None) -> keras.callbacks.History:
         logging.info('Preparing kitchen sink with %d tasks: %s', len(tasks), tasks)
 
         # Stop training if validation loss fails to decrease for 3 epochs
-        callbacks = [keras.callbacks.EarlyStopping(monitor='val_accuracy',
-                                                   patience=5,
-                                                   mode=max,
-                                                   restore_best_weights=True),
-                     keras.callbacks.TerminateOnNaN()]
+        callbacks = [
+            # keras.callbacks.EarlyStopping(monitor='val_accuracy',
+            #                               patience=5,
+            #                               mode='max',
+            #                               restore_best_weights=True),
+            keras.callbacks.TerminateOnNaN(),
+        ]
 
         # If requested, save model checkpoints
         if FLAGS.checkpoint_file:
@@ -229,15 +219,23 @@ class Experiment(object):
                                                              monitor='val_accuracy',
                                                              save_best_only=True))
 
-        if hidden_size:
-            warmup_epochs = warmup_epochs or 1
-            num_epochs += warmup_epochs
+        steps_per_epoch = samples_per_epoch // batch_size
 
-            def lr_schedule(epoch):
-                return 5000.0 * hidden_size ** -0.5 * tf.minimum(
-                    (epoch + 1) * warmup_epochs ** -1.5, (epoch + 1) ** -0.5)
+        lr = tfa.optimizers.Triangular2CyclicalLearningRate(
+            initial_learning_rate=0.,
+            maximal_learning_rate=1e-4,
+            step_size=2 * steps_per_epoch,
+        )
+        opt = tfa.optimizers.LazyAdam(learning_rate=lr, epsilon=1e-08)
 
-            callbacks.append(keras.callbacks.LearningRateScheduler(lr_schedule))
+        if tf.config.optimizer.get_experimental_options().get('auto_mixed_precision'):
+            logging.debug('Enabling loss scaling')
+            opt = keras.mixed_precision.experimental.LossScaleOptimizer(opt, 'dynamic')
+
+        loss = keras.losses.SparseCategoricalCrossentropy(name='loss', reduction=keras.losses.Reduction.SUM)
+        metric = keras.metrics.SparseCategoricalAccuracy('accuracy')
+
+        model.compile(optimizer=opt, loss=loss, weighted_metrics=[metric], sample_weight_mode='temporal')
 
         # Train the model & return its training history
         logging.info('Beginning training...')
@@ -246,18 +244,19 @@ class Experiment(object):
         validation_data = self.load_valid_data(tasks,
                                                batch_size=eval_batch_size or batch_size,
                                                num_batches=eval_batches)
+
         logging.info('validation=%s', validation_data)
         history = model.fit(x=training_data,
                             validation_data=validation_data,
                             epochs=num_epochs,
                             verbose=1,
-                            steps_per_epoch=samples_per_epoch // batch_size,
+                            steps_per_epoch=steps_per_epoch,
                             callbacks=callbacks)
 
         return history
 
     def predict(self,
-                model: tf.keras.Model,
+                model: keras.Model,
                 tasks: typing.List[str],
                 splits: typing.Iterable[tfds.Split],
                 eval_batch_size: int,
@@ -364,24 +363,16 @@ def main(argv):
     # Load model
     model = load_model(model_name=FLAGS.model_name)
 
-    if isinstance(model, transformers.TFPreTrainedModel):
-        model: transformers.TFPreTrainedModel
-        hidden_size = model.num_parameters(True)
-    else:
-        raise NotImplementedError('Determining hidden_size is only support for huggingface TF models.')
-
     # Train model
     logging.info('Training %s with %s...', FLAGS.model_name, ' '.join(FLAGS.tasks))
     history = experiment.train(model,
                                tasks=FLAGS.tasks,
                                num_epochs=FLAGS.num_epochs,
-                               warmup_epochs=FLAGS.warmup_epochs,
                                samples_per_epoch=FLAGS.samples_per_epoch,
                                batch_size=FLAGS.batch_size,
                                eval_batch_size=FLAGS.eval_batch_size,
                                eval_batches=FLAGS.eval_batches,
-                               checkpoint_file=FLAGS.checkpoint_file,
-                               hidden_size=hidden_size)
+                               checkpoint_file=FLAGS.checkpoint_file)
 
     # Print final results
     for metric, value in history.history.items():
