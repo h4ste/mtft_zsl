@@ -45,8 +45,8 @@ sink.register('super_glue/copa',
               }))
 
 _eviconv_stance_mapping = sink.LabelMapping('stance', {
-    0: sink.Constant('PRO :'),
-    1: sink.Constant('CON :'),
+    0: sink.Constant('PRO:'),
+    1: sink.Constant('CON:'),
 })
 sink.register('evi_conv',
               prompt=sink.Constant('argue'),
