@@ -1,4 +1,3 @@
-import abc
 import typing
 
 import numpy as np
@@ -32,7 +31,6 @@ class TransformerOutputWrapper(keras.Model):
 class TFExperiment(Experiment[tf.keras.Model]):
 
     def load_model(self, model_name: str) -> tf.keras.Model:
-
         model_name = model_name
         logging.info('Loading pre-trained TF model from %s', model_name)
 
@@ -100,10 +98,12 @@ class TFExperiment(Experiment[tf.keras.Model]):
         training_data = self.load_train_data(tasks,
                                              batch_size=batch_size,
                                              prefetch_size=prefetch_size)
+
         validation_data = self.load_valid_data(tasks,
                                                batch_size=eval_batch_size or batch_size,
                                                prefetch_size=prefetch_size,
                                                num_batches=eval_batches)
+
         history = model.fit(x=training_data,
                             validation_data=validation_data,
                             epochs=num_epochs,
@@ -111,7 +111,7 @@ class TFExperiment(Experiment[tf.keras.Model]):
                             steps_per_epoch=steps_per_epoch,
                             callbacks=callbacks)
 
-        for metric, values in history.history:
+        for metric, values in history.history.items():
             logging.info('%s: %s', metric, values)
 
     def predict_task_split(self, model, inputs: tf.data.Dataset) -> typing.Optional[np.ndarray]:

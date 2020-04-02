@@ -44,7 +44,9 @@ class NlgEvaluator(Evaluator):
         self.nlg = nlg_eval.NLGEval()
 
     def evaluate(self, predictions: Predictions) -> str:
-        headers = ['Task', 'Split', 'BLEU-1', 'BLEU-2', 'BLEU-3', 'BLEU-4', 'ROUGE-L', 'METEOR', 'CIDEr', 'STCS', 'EACS', 'VECS', 'GMS']
+        headers = ['Task', 'Split',
+                   'BLEU-1', 'BLEU-2', 'BLEU-3', 'BLEU-4',
+                   'ROUGE-L', 'METEOR', 'CIDEr', 'STCS', 'EACS', 'VECS', 'GMS']
         results = []
 
         for task, task_predictions in predictions.items():

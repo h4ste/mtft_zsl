@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow.compat.v2 as tf
 import tensorflow_datasets.public_api as tfds
 
-from fslks import sink
+from fslks import sink, eval
 
 Model = typing.TypeVar('Model')
 
@@ -213,7 +213,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                 inputs = task_data.map(lambda inputs_, targets_, sample_weights: inputs_)
 
                 logits = self.predict_task_split(model, inputs)
-                if not logits:
+                if logits is None:
                     logging.warning('Task %s has no labels for split %s, so it will not be evaluated.',
                                     task, split)
                     continue
