@@ -63,6 +63,23 @@ TaskPredictions = typing.MutableMapping[tfds.Split, TaskSplitPredictions]
 Predictions = typing.MutableMapping[str, TaskPredictions]
 
 
+class TransformerWrapper(keras.Model):
+
+    def __init__(self, model: transformers.TFPreTrainedModel):
+        super().__init__()
+        self.model = model
+
+    def call(self, inputs, **kwargs):
+        outputs = self.model(inputs, **kwargs)
+        if isinstance(outputs, tuple):
+            logging.info('Outputs was a tuple, returning %s instead', outputs[0])
+            return outputs[0]
+        elif isinstance(outputs, tf.Tensor):
+            return outputs
+        else:
+            raise ValueError('Unexpected outputs (type: %s): %s', type(outputs), outputs)
+
+
 def configure_tf(use_xla: bool = False,
                  use_amp: bool = False) -> None:
     logging.info(('Enabling' if use_xla else 'Disabling') + ' XLA optimization')
@@ -83,7 +100,7 @@ def load_model(model_name: str) -> keras.Model:
     else:
         model = transformers.TFAutoModelWithLMHead.from_pretrained(model_name)
 
-    return model
+    return TransformerWrapper(model)
 
 
 def concatenate(datasets: typing.Iterable[tf.data.Dataset]):
@@ -112,7 +129,7 @@ class Experiment(object):
         logging.debug('Loading tokenizer from %s...', tokenizer_name)
         tokenizer: transformers.PreTrainedTokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name)
         if not tokenizer.pad_token:
-            tokenizer.pad_token = 0
+            tokenizer.pad_token = '[PAD]'
         self.encoder_fn = functools.partial(tokenizer.encode_plus,
                                             add_special_tokens=False,
                                             add_space_before_punct_symbol=True,
