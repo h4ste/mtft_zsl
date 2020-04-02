@@ -58,6 +58,12 @@ def main(argv):
         experiment = experiments.TFExperiment(tokenizer_name=FLAGS.model_name,
                                               data_dir=FLAGS.data_dir,
                                               max_seq_len=FLAGS.max_seq_len)
+    elif FLAGS.implementation == 'pytorch':
+        # When you're ready, uncomment these lines (assuming your pytorch experiment class is named PTExperiment)
+        # experiment = experiments.PTExperiment(tokenizer_name=FLAGS.model_name,
+        #                                       data_dir=FLAGS.data_dir,
+        #                                       max_seq_len=FLAGS.max_seq_len)
+        raise NotImplementedError('PyTorch support coming soon to a sink near you!')
     else:
         raise NotImplementedError('Unsupported implementation \"%s\"' % FLAGS.implementation)
 
