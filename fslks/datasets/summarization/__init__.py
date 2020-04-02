@@ -1,1 +1,1 @@
-from .bioasq import BioASQ
+from .bioasq import Bioasq
