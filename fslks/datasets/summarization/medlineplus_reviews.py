@@ -2,6 +2,7 @@
 Module to create MedlinePlus PubMed review summarization tensorflow dataset. 
 """
 import os
+import json
 
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
@@ -10,11 +11,13 @@ _DESCRIPTION = """The MedlinePlus multi-document review summarization dataset, b
 
 _CITATION = """This work is 100% plagiarized"""
 
+_MEDLINEPLUS_REVIEW_DOWNLOAD_INSTRUCTIONS = """Do stuff here. Or don't. Who cares."""
 
 class MedlinePlusReviews(tfds.core.GeneratorBasedBuilder):
     """MedlinePlus review summarization dataset builder"""
 
     VERSION = tfds.core.Version("1.0.0")
+    MANUAL_DOWNLOAD_INSTRUCTIONS = _MEDLINEPLUS_REVIEW_DOWNLOAD_INSTRUCTIONS
 
     def _info(self):
         return tfds.core.DatasetInfo(
@@ -46,15 +49,15 @@ class MedlinePlusReviews(tfds.core.GeneratorBasedBuilder):
         with tf.io.gfile.GFile(path) as f:
             data = json.load(f)
             for i, url in enumerate(data):
-                summary = data['url']
+                summary = data[url]['summary']
                 articles = []
                 pmids = []
-                for pmid in data['url']['reviews']:
+                for pmid in data[url]['reviews']:
                     pmids.append(pmid)
-                    articles.append(data['url']['reviews'][pmid])
+                    articles.append(data[url]['reviews'][pmid])
                 yield i, {
                     'summary': summary,
                     'url': url,
-                    'articles': articles
+                    'articles': articles,
                     'pmids': pmids,
                 }
