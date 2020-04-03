@@ -83,6 +83,7 @@ class PTExperiment(Experiment[torch.nn.Module]):
               checkpoint_file: typing.Optional[str] = None) -> None:
         logging.info('Preparing kitchen sink with %d tasks: %s', len(tasks), tasks)
 
+        # Don't need this but placeholder to see what I need
         PTExperiment.compile_model(model, steps_per_epoch)
 
         # Stop training if validation loss fails to decrease for 3 epochs
