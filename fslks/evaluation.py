@@ -1,10 +1,14 @@
-from fslks.run_experiment import Predictions
+import numpy as np
+
+from fslks.experiments import Predictions
 from fslks import eval
 
 import abc
 import importlib
 
 from tabulate import tabulate
+
+from absl import logging
 
 
 class Evaluator(abc.ABC):
@@ -39,9 +43,8 @@ class BasicEvaluator(Evaluator):
 
 class NlgEvaluator(Evaluator):
 
-    def __init__(self):
-        nlg_eval = importlib.import_module('nlgeval')
-        self.nlg = nlg_eval.NLGEval()
+    def __init__(self, nlg):
+        self.nlg = nlg
 
     def evaluate(self, predictions: Predictions) -> str:
         headers = ['Task', 'Split',
@@ -54,13 +57,21 @@ class NlgEvaluator(Evaluator):
                 targets = split_predictions['target_tokens']
                 predictions = split_predictions['pred_tokens']
 
-                metrics = self.nlg.compute_metrics(targets, predictions)
+                logging.info('%s[%s]: Targets shape: %s; Targets[0]: %s',
+                             task, split, np.asarray(targets).shape, targets[0])
+                logging.info('%s[%s]: Predictions shape: %s; Predictions[0]: %s',
+                             task, split, np.asarray(predictions).shape, predictions[0])
+
+                # NLG Eval requires a list of references for each hypothesis
+                references = [[target] for target in targets]
+
+                metrics = self.nlg.compute_metrics(references, predictions)
                 results.append([task, split,
                                 metrics['Bleu-1'],
                                 metrics['Bleu-2'],
                                 metrics['Bleu-3'],
                                 metrics['Bleu-4'],
-                                metrics['ROUGLE_L'],
+                                metrics['ROUGE_L'],
                                 metrics['METEOR'],
                                 metrics['CIDEr'],
                                 metrics['SkipThoughtsCosineSimilarity'],
@@ -70,3 +81,14 @@ class NlgEvaluator(Evaluator):
 
         return tabulate(results, headers=headers)
 
+
+def evaluate(predictions: Predictions) -> str:
+    evaluator: Evaluator
+
+    try:
+        nlg_eval = importlib.import_module('nlgeval')
+        evaluator = NlgEvaluator(nlg=nlg_eval.NLGEval())
+    except ModuleNotFoundError:
+        evaluator = BasicEvaluator()
+
+    return evaluator.evaluate(predictions)

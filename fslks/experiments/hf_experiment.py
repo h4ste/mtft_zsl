@@ -6,14 +6,19 @@ import numpy as np
 import tensorflow.compat.v2 as tf
 import tensorflow_datasets.public_api as tfds
 
-from fslks import sink, eval
-
-Model = typing.TypeVar('Model')
-
 from absl import logging
-from tabulate import tabulate
 
 import transformers
+
+from fslks import sink
+
+# Type variable for Experiments
+Model = typing.TypeVar('Model')
+
+# Type aliases for Predictions table
+TaskSplitPredictions = typing.MutableMapping[str, typing.Union[typing.Sequence[str], np.ndarray]]
+TaskPredictions = typing.MutableMapping[tfds.Split, TaskSplitPredictions]
+Predictions = typing.MutableMapping[str, TaskPredictions]
 
 # The types of inputs provided to the Transformer
 INPUT_TYPES: typing.Mapping[str, tf.dtypes.DType] = {
@@ -27,11 +32,6 @@ OUTPUT_TYPE: tf.dtypes.DType = tf.int32
 
 # Type of sample weights
 SAMPLE_WEIGHT_TYPE: tf.dtypes.DType = tf.float32
-
-# Type aliases for Predictions table
-TaskSplitPredictions = typing.MutableMapping[str, typing.Union[typing.Sequence[str], np.ndarray]]
-TaskPredictions = typing.MutableMapping[tfds.Split, TaskSplitPredictions]
-Predictions = typing.MutableMapping[str, TaskPredictions]
 
 
 def concatenate(datasets: typing.Iterable[tf.data.Dataset]):
@@ -239,30 +239,3 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                     'target_tokens': list(map(self.decoder_fn, targets))
                 }
         return predictions
-
-    def evaluate(self, predictions: Predictions) -> str:
-        headers = ['Task', 'Split', 'W. Acc.', 'BLEU', 'ROUGE-1', 'ROUGE-2', 'ROUGE-L']
-        results = []
-
-        for task, task_predictions in predictions.items():
-            for split, split_predictions in task_predictions.items():
-                targets = split_predictions['target_tokens']
-                predictions_ = split_predictions['pred_tokens']
-                try:
-                    logging.debug('Evaluating %s[%s] W. Acc...', task, split)
-                    w_acc = eval.word_accuracy(targets, predictions_)
-                    logging.debug('Evaluating %s[%s] BLEU...', task, split)
-                    bleus = eval.bleu(targets, predictions_)
-                    logging.debug('Evaluating %s[%s] ROUGE...', task, split)
-                    rouges = eval.rouge(targets, predictions_)
-                    results.append([task, split,
-                                    w_acc,
-                                    bleus[0] * 100.,
-                                    rouges['rouge_1/f_score'] * 100.,
-                                    rouges['rouge_2/f_score'] * 100.,
-                                    rouges['rouge_l/f_score'] * 100.])
-                except ZeroDivisionError as e:
-                    logging.warning('Division by zero when evaluating %s[%s]', task, split)
-                    results.append([task, split, 0., 0., 0., 0., 0.])
-
-        return tabulate(results, headers=headers)

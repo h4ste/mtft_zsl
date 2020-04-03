@@ -16,6 +16,7 @@ from absl import logging
 # noinspection PyUnresolvedReferences
 from fslks import tasks
 from fslks import experiments
+from fslks import evaluation
 
 FLAGS = flags.FLAGS
 flags.DEFINE_spaceseplist("tasks", None, "One or more tasks to be used for pretraining")
@@ -91,7 +92,7 @@ def main(argv):
                                      splits=[tfds.Split.TRAIN, tfds.Split.VALIDATION, tfds.Split.TEST])
 
     logging.info('Results:')
-    results = experiment.evaluate(predictions)
+    results = evaluation.evaluate(predictions)
     print(results)
 
 
