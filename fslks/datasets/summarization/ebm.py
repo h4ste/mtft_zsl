@@ -10,17 +10,16 @@ _DESCRIPTION = """Evidence-based Medicine dataset for summarization, available a
 
 _CITATION = """This work is 100% plagiarized"""
 
-_EBM_DOWNLOAD_INSTRUCTIONS = """OOH MAGIC"""
+_EBM_DOWNLOAD_INSTRUCTIONS = """Download the Evidence-based-medicine dataset from https://sourceforge.net/projects/ebmsumcorpus/ and run the provided pre-processing script."""
 
 
 class EBM(tfds.core.GeneratorBasedBuilder):
     """EBM dataset builder"""
 
-    VERSION = tfds.core.Version("1.0.0")
+    VERSION = tfds.core.Version("2.1.0")
     MANUAL_DOWNLOAD_INSTRUCTIONS = _EBM_DOWNLOAD_INSTRUCTIONS
 
-    def __init__(self, single_document=True, config=None, version=None, data_dir=None):
-        self.single_document = single_document
+    def __init__(self, config=None, version=None, data_dir=None):
         super().__init__(data_dir=data_dir, config=config, version=version)
 
     def _info(self):
@@ -40,30 +39,35 @@ class EBM(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
         path = dl_manager.manual_dir
-        # No split. To make split on the fly see  
-        # https://github.com/tensorflow/datasets/blob/master/docs/splits.md
         return [
             tfds.core.SplitGenerator(
                 name=tfds.Split.TRAIN,
                 gen_kwargs={
-                    "path": os.path.join(path, "ebm_collection.json")}),
+                    "path": os.path.join(path, "ebm_train_collection.json")}),
+            tfds.core.SplitGenerator(
+                name=tfds.Split.VALIDATION,
+                gen_kwargs={
+                    "path": os.path.join(path, "ebm_val_collection.json")}),
+            tfds.core.SplitGenerator(
+                name=tfds.Split.TEST,
+                gen_kwargs={
+                    "path": os.path.join(path, "ebm_test_collection.json")}),
         ]
 
     def _generate_examples(self, path=None):
         """Parse and yield ebm_collection.json for multi-document summarization
         
         This could also be configured to do single document summarization with
-        justifications as the summary and articles as the source.
+        justifications as the summary and articles as the source. 
         """
-        # THIS IS A WEIRD DATASET!
         with tf.io.gfile.GFile(path) as f:
             data = json.load(f)
             example_cnt = 0
             for example in data:
                 question = data[example]['question']
                 # Multiple answers, each answer with multiple justifications
-                # Here the answer will be the summary, and the multiple
-                # justifications the source text. So one question will have
+                # Here the answer will be the summary, and the references of the multiple
+                # justifications will be the source text. So one question will have
                 # multiple answers in the dataset.
                 for answer in data[example]['answers']:
                     answer_text = answer['answer_text']
@@ -73,6 +77,7 @@ class EBM(tfds.core.GeneratorBasedBuilder):
                     # Iterate through justifications, and take the abstract
                     # the justication text was taken from, not the justification
                     # text itself.
+                    #TODO: Check for blank abstracts/justifications
                     for justification in answer['justifications']:
                         for pmid in justification[1]:
                             justifications.append(justification[1][pmid])

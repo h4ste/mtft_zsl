@@ -13,7 +13,7 @@ _CITATION = """This work is 100% plagiarized"""
 
 _MEDLINEPLUS_REVIEW_DOWNLOAD_INSTRUCTIONS = """Do stuff here. Or don't. Who cares."""
 
-class MedlinePlusReviews(tfds.core.GeneratorBasedBuilder):
+class MedlineplusReviews(tfds.core.GeneratorBasedBuilder):
     """MedlinePlus review summarization dataset builder"""
 
     VERSION = tfds.core.Version("1.0.0")
@@ -36,12 +36,19 @@ class MedlinePlusReviews(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
         path = dl_manager.manual_dir
-        # Make split on the fly: https://github.com/tensorflow/datasets/blob/master/docs/splits.md
         return [
             tfds.core.SplitGenerator(
                 name=tfds.Split.TRAIN,
                 gen_kwargs={
-                    "path": os.path.join(path, "medlineplus_review_collection.json")}),
+                    "path": os.path.join(path, "medlineplus_train_review_collection.json")}),
+            tfds.core.SplitGenerator(
+                name=tfds.Split.VALIDATION,
+                gen_kwargs={
+                    "path": os.path.join(path, "medlineplus_val_review_collection.json")}),
+            tfds.core.SplitGenerator(
+                name=tfds.Split.TEST,
+                gen_kwargs={
+                    "path": os.path.join(path, "medlineplus_test_review_collection.json")}),
         ]
 
     def _generate_examples(self, path):

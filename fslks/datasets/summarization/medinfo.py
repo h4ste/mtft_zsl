@@ -11,15 +11,22 @@ _DESCRIPTION = """The MedInfo single document summarization dataset, built using
 available from https://github.com/abachaa/Medication_QA_MedInfo2019.
 """
 
-_CITATION = """This work is 100% plagiarized"""
+_CITATION = """@inproceedings{BenAbacha:MEDINFO19, 
+       author    = {Asma {Ben Abacha} and Yassine Mrabet and Mark Sharp and
+   Travis Goodwin and Sonya E. Shooshan and Dina Demner{-}Fushman},    
+       title     = {Bridging the Gap between Consumers Medication Questions and Trusted Answers}, 
+       booktitle = {MEDINFO 2019},   
+       year      = {2019},
+    }
+"""
 
-_MEDINFO_DOWNLOAD_INSTRUCTIONS = """Do stuff here. Or don't. Who cares."""
+_MEDINFO_DOWNLOAD_INSTRUCTIONS = """Link to medinfo and provide processing script? Or link to my github where I've done the article scraping, etc"""
 
 
 class Medinfo(tfds.core.GeneratorBasedBuilder):
     """MedInfo summarization dataset builder"""
 
-    VERSION = tfds.core.Version("1.0.0")
+    VERSION = tfds.core.Version("2.1.0")
     MANUAL_DOWNLOAD_INSTRUCTIONS = _MEDINFO_DOWNLOAD_INSTRUCTIONS
 
     def _info(self):
@@ -38,12 +45,19 @@ class Medinfo(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
         path = dl_manager.manual_dir
-        # Make split on the fly: https://github.com/tensorflow/datasets/blob/master/docs/splits.md
         return [
             tfds.core.SplitGenerator(
                 name=tfds.Split.TRAIN,
                 gen_kwargs={
-                    "path": os.path.join(path, "medinfo_section2answer_collection.json")}),
+                    "path": os.path.join(path, "medinfo_train_collection.json")}),
+            tfds.core.SplitGenerator(
+                name=tfds.Split.VALIDATION,
+                gen_kwargs={
+                    "path": os.path.join(path, "medinfo_validation_collection.json")}),
+            tfds.core.SplitGenerator(
+                name=tfds.Split.TEST,
+                gen_kwargs={
+                    "path": os.path.join(path, "medinfo_test_collection.json")}),
         ]
 
     def _generate_examples(self, path):
@@ -59,5 +73,3 @@ class Medinfo(tfds.core.GeneratorBasedBuilder):
                     'articles': articles,
                     'question': question,
                 }
-
-
