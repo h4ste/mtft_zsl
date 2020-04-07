@@ -16,7 +16,7 @@ _CITATION = """This work is 100% plagiarized"""
 _MEDLINEPLUS_REF_DOWNLOAD_INSTRUCTIONS = """Do stuff here. Or don't. Who cares."""
 
 
-class MedlinePlusReferences(tfds.core.GeneratorBasedBuilder):
+class MedlineplusReferences(tfds.core.GeneratorBasedBuilder):
     """MedlinePlus References (Start Here and Learn More Sections) summarization dataset builder"""
 
     VERSION = tfds.core.Version("1.0.0")
@@ -29,22 +29,29 @@ class MedlinePlusReferences(tfds.core.GeneratorBasedBuilder):
             features=tfds.features.FeaturesDict({
                 'summary': tfds.features.Text(),
                 'medlineplus_url': tfds.features.Text(),
-                'articles': tfds.features.Sequence(tfds.features.Text()),
+                'article': tfds.features.Sequence(tfds.features.Text()),
                 'reference_urls': tfds.features.Sequence(tfds.features.Text()),
             }),
-            supervised_keys=('articles', 'summary'),
+            supervised_keys=('article', 'summary'),
             citation=_CITATION
         )
 
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
         path = dl_manager.manual_dir
-        # Make split on the fly: https://github.com/tensorflow/datasets/blob/master/docs/splits.md
         return [
             tfds.core.SplitGenerator(
                 name=tfds.Split.TRAIN,
                 gen_kwargs={
-                    "path": os.path.join(path, "medlineplus_reference_collection.json")}),
+                    "path": os.path.join(path, "medlineplus_train_reference_collection.json")}),
+            tfds.core.SplitGenerator(
+                name=tfds.Split.VALIDATION,
+                gen_kwargs={
+                    "path": os.path.join(path, "medlineplus_val_reference_collection.json")}),
+            tfds.core.SplitGenerator(
+                name=tfds.Split.TEST,
+                gen_kwargs={
+                    "path": os.path.join(path, "medlineplus_test_reference_collection.json")}),
         ]
 
     def _generate_examples(self, path):
@@ -61,6 +68,6 @@ class MedlinePlusReferences(tfds.core.GeneratorBasedBuilder):
                 yield i, {
                     'summary': summary,
                     'medlineplus_url': mp_url,
-                    'articles': articles,
+                    'article': articles,
                     'reference_urls': urls,
                 }
