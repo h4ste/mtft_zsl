@@ -26,10 +26,10 @@ class MedlineplusReviews(tfds.core.GeneratorBasedBuilder):
             features=tfds.features.FeaturesDict({
                 'summary': tfds.features.Text(),
                 'url': tfds.features.Text(),
-                'articles': tfds.features.Sequence(tfds.features.Text()),
+                'article': tfds.features.Sequence(tfds.features.Text()),
                 'pmids': tfds.features.Sequence(tfds.features.Text()),
             }),
-            supervised_keys=('articles', 'summary'),
+            supervised_keys=('article', 'summary'),
             citation=_CITATION
         )
 
@@ -64,7 +64,7 @@ class MedlineplusReviews(tfds.core.GeneratorBasedBuilder):
                     articles.append(data[url]['reviews'][pmid])
                 yield i, {
                     'summary': summary,
-                    'url': url,
-                    'articles': articles,
+                    'medlineplus_url': url,
+                    'article': articles,
                     'pmids': pmids,
                 }

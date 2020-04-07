@@ -1,5 +1,5 @@
 """
-Module to create MEDIQA-Answer Summarization tensorflow dataset. 
+Module to create MEDIQA-Answer Summarization for Consumer Health Information Question Answering tensorflow dataset. 
 """
 import os
 import json
@@ -17,7 +17,7 @@ _CITATION = """This work is 100% plagiarized"""
 _MEDIQA_ANS_DOWNLOAD_INSTRUCTIONS = """Temp until upload""" 
 
 
-class AnsConfig(tfds.core.BuilderConfig):
+class ChiqaConfig(tfds.core.BuilderConfig):
     """Builder config for MEDIQA-Answer Summarization"""
 
     @tfds.core.disallow_positional_args
@@ -34,7 +34,7 @@ class AnsConfig(tfds.core.BuilderConfig):
           page2answer: `bool`, for long or short document (pages or passages) summarization
           **kwargs: keyword arguments forwarded to super.
         """
-        super(AnsConfig, self).__init__(
+        super(ChiqaConfig, self).__init__(
             version=tfds.core.Version(
                 "2.1.0"),
             supported_versions=[
@@ -48,55 +48,55 @@ class AnsConfig(tfds.core.BuilderConfig):
         self.extractive = extractive
 
 
-class Ans(tfds.core.GeneratorBasedBuilder):
+class Chiqa(tfds.core.GeneratorBasedBuilder):
     """MEDIQA-AnS dataset builder"""
 
     MANUAL_DOWNLOAD_INSTRUCTIONS = _MEDIQA_ANS_DOWNLOAD_INSTRUCTIONS
 
     BUILDER_CONFIGS = [
-            BioasqConfig(
+            ChiqaConfig(
                 name="multi-abs-s2a", 
                 single_doc=False,
                 extractive=False,
                 page2answer=False,
                 description="multi-document, abstractive, section2answer summarization"),
-            BioasqConfig(
+            ChiqaConfig(
                 name="multi-abs-p2a", 
                 single_doc=False,
                 extractive=False,
                 page2answer=True,
                 description="multi-document, abstractive, page2answer summarization"),
-            BioasqConfig(
+            ChiqaConfig(
                 name="multi-ext-s2a", 
                 single_doc=False,
                 extractive=True,
                 page2answer=False,
                 description="multi-document, extractive, section2answer summarization"),
-            BioasqConfig(
+            ChiqaConfig(
                 name="multi-ext-p2a", 
                 single_doc=False,
                 extractive=True,
                 page2answer=True,
                 description="multi-document, extractive, page2answer summarization"),
-            BioasqConfig(
+            ChiqaConfig(
                 name="single-abs-s2a", 
                 single_doc=True,
                 extractive=False,
                 page2answer=False,
                 description="single-document, abstractive, section2answer summarization"),
-            BioasqConfig(
+            ChiqaConfig(
                 name="single-abs-p2a", 
                 single_doc=True,
                 extractive=False,
                 page2answer=True,
                 description="single-document, abstractive, page2answer summarization"),
-            BioasqConfig(
+            ChiqaConfig(
                 name="single-ext-s2a", 
                 single_doc=True,
                 extractive=True,
                 page2answer=False,
                 description="single-document, extractive, section2answer summarization"),
-            BioasqConfig(
+            ChiqaConfig(
                 name="single-ext-p2a", 
                 single_doc=True,
                 extractive=True,
@@ -110,10 +110,8 @@ class Ans(tfds.core.GeneratorBasedBuilder):
         # Similary for pmids
         if self.builder_config.single_doc:
             source_feature = tfds.features.Text() 
-            pmid_feature = tfds.features.Text() 
         else: 
             source_feature = tfds.features.Sequence(tfds.features.Text())
-            pmid_feature = tfds.features.Sequence(tfds.features.Text())
 
         return tfds.core.DatasetInfo(
             builder=self,
@@ -122,7 +120,6 @@ class Ans(tfds.core.GeneratorBasedBuilder):
                 'article': source_feature,
                 'summary': tfds.features.Text(),
                 'question': tfds.features.Text(),
-                'pmid': pmid_feature,
             }),
             supervised_keys=('article', 'summary'),
             citation=_CITATION
@@ -140,32 +137,26 @@ class Ans(tfds.core.GeneratorBasedBuilder):
 
     def _generate_examples(self, path=None):
         """Parse and yield bioasq_collection.json for single and multi-document summarization"""
-        #TODO: Convert bioasq to mediqans parsing 
         with tf.io.gfile.GFile(path) as f:
             data = json.load(f)
             example_cnt = 0
             for example in data:
                 question = data[example]['question']
                 if self.builder_config.single_doc:
-                    for article in data[example]['articles']:
+                    for answer_id in data:
                         example_cnt += 1
                         yield example_cnt, {
-                            'article': snippet['article'],
-                            'summary': snippet['snippet'],
+                            'article': data[answer_id]['articles'],
+                            'summary': data[answer_id]['summary'],
                             'question': question,
-                            'pmid': snippet['pmid'],
                         }
                 else:
                     articles = []
-                    pmids = []
                     example_cnt += 1
-                    for snippet in bioasq_data[example]['snippets']:
-                        if snippet['pmid'] not in pmids:
-                            pmids.append(snippet['pmid'])
-                            articles.append(snippet['article'])
+                    for answer_id in data[example]['articles']:
+                        articles.append(data[example]['articles']['article_id'][0]),
                     yield example_cnt, {
                         'article': articles,
-                        'summary': bioasq_data[example]['ideal_answer'],
+                        'summary': data[example]['summary'],
                         'question': question,
-                        'pmid': pmids,
                         }

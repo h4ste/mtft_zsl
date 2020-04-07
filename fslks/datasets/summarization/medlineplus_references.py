@@ -29,10 +29,10 @@ class MedlineplusReferences(tfds.core.GeneratorBasedBuilder):
             features=tfds.features.FeaturesDict({
                 'summary': tfds.features.Text(),
                 'medlineplus_url': tfds.features.Text(),
-                'articles': tfds.features.Sequence(tfds.features.Text()),
+                'article': tfds.features.Sequence(tfds.features.Text()),
                 'reference_urls': tfds.features.Sequence(tfds.features.Text()),
             }),
-            supervised_keys=('articles', 'summary'),
+            supervised_keys=('article', 'summary'),
             citation=_CITATION
         )
 
@@ -68,6 +68,6 @@ class MedlineplusReferences(tfds.core.GeneratorBasedBuilder):
                 yield i, {
                     'summary': summary,
                     'medlineplus_url': mp_url,
-                    'articles': articles,
+                    'article': articles,
                     'reference_urls': urls,
                 }

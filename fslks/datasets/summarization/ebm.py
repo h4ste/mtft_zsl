@@ -29,7 +29,7 @@ class EBM(tfds.core.GeneratorBasedBuilder):
             features=tfds.features.FeaturesDict({
                 'summary': tfds.features.Text(),
                 'question': tfds.features.Text(),
-                'articles': tfds.features.Sequence(tfds.features.Text()),
+                'article': tfds.features.Sequence(tfds.features.Text()),
                 'pmids': tfds.features.Sequence(tfds.features.Text()),
             }),
             supervised_keys=('article', 'summary'),
@@ -83,7 +83,7 @@ class EBM(tfds.core.GeneratorBasedBuilder):
                             justifications.append(justification[1][pmid])
                             pmids.append(pmid)
                     yield example_cnt, {
-                            'articles': justifications,
+                            'article': justifications,
                             'summary': answer_text,
                             'question': question,
                             'pmids': pmids,

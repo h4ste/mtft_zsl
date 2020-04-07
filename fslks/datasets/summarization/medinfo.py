@@ -35,10 +35,10 @@ class Medinfo(tfds.core.GeneratorBasedBuilder):
             description=_DESCRIPTION,
             features=tfds.features.FeaturesDict({
                 'summary': tfds.features.Text(),
-                'articles': tfds.features.Text(),
+                'article': tfds.features.Text(),
                 'question': tfds.features.Text(),
                 }),
-            supervised_keys=('articles', 'summary'),
+            supervised_keys=('article', 'summary'),
             citation=_CITATION
         )
 
@@ -66,10 +66,10 @@ class Medinfo(tfds.core.GeneratorBasedBuilder):
             data = json.load(f)
             for i, key in enumerate(data):
                 summary = data[key]['summary']
-                articles = data[key]['articles']
+                article = data[key]['articles']
                 question = data[key]['question']
                 yield i, {
                     'summary': summary,
-                    'articles': articles,
+                    'article': article,
                     'question': question,
                 }

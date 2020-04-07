@@ -4,17 +4,18 @@ Module to create tensorflow dataset of publisher created summaries of articles i
 
 import os
 import glob
+import json
 
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
 
 _DESCRIPTION = """PubMed Publisher-Summary dataset, generated using 2020 PubMed baseline""" 
 
-_CITATION = """This work is 100% plagiarized"""
+_CITATION = """None"""
 
-_PUBMED_DOWNLOAD_INSTRUCTIONS = """Do stuff here. Or don't. Who cares."""
+_PUBMED_DOWNLOAD_INSTRUCTIONS = """This data set can be created using e-utils and parsing the text associated with nodes with the plain-language-summary attribute available in the PubMed XML."""
 
-class PubMedSumm(tfds.core.GeneratorBasedBuilder):
+class PubmedSumm(tfds.core.GeneratorBasedBuilder):
     """PubMed Publisher-Summary dataset builder"""
 
     VERSION = tfds.core.Version("1.0.0")
@@ -38,24 +39,26 @@ class PubMedSumm(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
         path = dl_manager.manual_dir
-        # To make split on the fly see  
-        # https://github.com/tensorflow/datasets/blob/master/docs/splits.md
         return [
             tfds.core.SplitGenerator(
                 name=tfds.Split.TRAIN,
                 gen_kwargs={
-                    "path": os.path.join(path, "pubmed_publisher_summ_collection.json")}),
+                    "path": os.path.join(path, "pubmed_pubsumm_train_collection.json")}),
+                tfds.core.SplitGenerator(
+                    name=tfds.Split.TEST,
+                    gen_kwargs={
+                        "path": os.path.join(path, "pubmed_pubsumm_test_collection.json")}),
         ]
 
     def _generate_examples(self, path):
-        """Parse and yield pubmed_publisher_summ_collection.json for single document summarization"""
+        """Parse and yield pubmed publisher summaries for single document summarization"""
         with tf.io.gfile.GFile(path) as f:
             data = json.load(f)
             for i, pmid in enumerate(data):
                 yield i, {
-                    'article': data[pmid]['abstract'],
-                    'title': data[pmid]['title'],
-                    'summary': data[pmid]['summary'],
+                    'article': data[pmid]['abstract'].strip(),
+                    'title': data[pmid]['title'].strip(),
+                    'summary': data[pmid]['summary'].strip(),
                     'pubdate': data[pmid]['pubdate'],
                     'pmid': pmid,
                 }
