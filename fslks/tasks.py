@@ -14,6 +14,59 @@ sink.register('bioasq',
               ]),
               output=sink.Feature('summary'))
 
+sink.register('chiqa',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Feature('article')
+              ]),
+              output=sink.Feature('summary'))
+
+sink.register('ebm',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Feature('articles')
+                  sink.Feature('pmids')
+              ]),
+              output=sink.Feature('summary'))
+
+sink.register('medlineplus_references',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('articles')
+                  sink.Feature('medlineplus_url')
+                  sink.Feature('reference_urls')
+              ]),
+              output=sink.Feature('summary'))
+
+sink.register('medlineplus_reviews',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('article')
+                  sink.Feature('medlineplus_url')
+                  sink.Feature('pmids')
+              ]),
+              output=sink.Feature('summary'))
+
+sink.register('medinfo',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Feature('article')
+              ]),
+              output=sink.Feature('summary'))
+
+sink.register('pubmed',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('article')
+                  sink.Feature('title')
+                  sink.Feature('pubdate')
+                  sink.Feature('pmid')
+              ]),
+              output=sink.Feature('summary'))
+
 sink.register('scientific_papers',
               prompt=sink.Constant('summarize'),
               input=sink.Feature('article'),
