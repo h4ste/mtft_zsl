@@ -26,7 +26,7 @@ sink.register('ebm',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
-                  sink.Feature('article')
+                  sink.Feature('article'),
                   sink.Feature('pmids')
               ]),
               output=sink.Feature('summary'))
@@ -34,8 +34,8 @@ sink.register('ebm',
 sink.register('medlineplus_references',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
-                  sink.Feature('article')
-                  sink.Feature('medlineplus_url')
+                  sink.Feature('article'),
+                  sink.Feature('medlineplus_url'),
                   sink.Feature('reference_urls')
               ]),
               output=sink.Feature('summary'))
@@ -43,8 +43,8 @@ sink.register('medlineplus_references',
 sink.register('medlineplus_reviews',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
-                  sink.Feature('article')
-                  sink.Feature('medlineplus_url')
+                  sink.Feature('article'),
+                  sink.Feature('url'),
                   sink.Feature('pmids')
               ]),
               output=sink.Feature('summary'))
@@ -60,9 +60,9 @@ sink.register('medinfo',
 sink.register('pubmed',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
-                  sink.Feature('article')
-                  sink.Feature('title')
-                  sink.Feature('pubdate')
+                  sink.Feature('article'),
+                  sink.Feature('title'),
+                  sink.Feature('pubdate'),
                   sink.Feature('pmid')
               ]),
               output=sink.Feature('summary'))
