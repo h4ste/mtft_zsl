@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow.compat.v2 as tf
 import tensorflow.keras as keras
 import tensorflow_addons as tfa
+import tensorflow_datasets.public_api as tfds
 
 from fslks.experiments import Experiment
 from absl import logging
@@ -115,10 +116,14 @@ class TFExperiment(Experiment[tf.keras.Model]):
                                              batch_size=batch_size,
                                              prefetch_size=prefetch_size)
 
-        validation_data = self.load_valid_data(tasks,
-                                               batch_size=eval_batch_size or batch_size,
-                                               prefetch_size=prefetch_size,
-                                               num_batches=eval_batches)
+        validation_tasks = filter(lambda task: self.split_in_dataset(tfds.Split.VALIDATION, task), tasks)
+        if validation_tasks:
+            validation_data = self.load_valid_data(validation_tasks,
+                                                   batch_size=eval_batch_size or batch_size,
+                                                   prefetch_size=prefetch_size,
+                                                   num_batches=eval_batches)
+        else:
+            validation_tasks = None
 
         history = model.fit(x=training_data,
                             validation_data=validation_data,

@@ -177,7 +177,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             training_itr.set_postfix_str('Global step: %d, tr_loss: %f, val_loss: %f' % (
                 global_step,
                 running_loss / training_steps,
-                running_valid_loss / valid_steps))
+                running_valid_loss / valid_steps if valid_steps > 0 else 'NaN'))
 
             training_itr.close()
             logging.get_absl_handler()
