@@ -38,14 +38,8 @@ flags.DEFINE_string('checksum_dir', '/data/LHC_kitchensink/tensorflow_datasets/u
 flags.DEFINE_integer('steps_per_epoch', 100, 'Number of steps considered as an epoch')
 flags.DEFINE_enum('implementation', default='tensorflow', enum_values=['tensorflow', 'pytorch'],
                   help='implementation to use for huggingface models')
-
-
-def configure_tf(use_xla: bool = False,
-                 use_amp: bool = False) -> None:
-    logging.info(('Enabling' if use_xla else 'Disabling') + ' XLA optimization')
-    tf.config.optimizer.set_jit(use_xla)
-    logging.info(('Enabling' if use_amp else 'Disabling') + ' auto mixed precision (AMP)')
-    tf.config.optimizer.set_experimental_options({'auto_mixed_precision': use_amp})
+flags.DEFINE_enum('evaluation', default='basic', enum_values=['basic', 'nlg'],
+                  help='method to use for evaluating model performance')
 
 
 def main(argv):
@@ -55,16 +49,17 @@ def main(argv):
 
     experiment: experiments.Experiment
     if FLAGS.implementation == 'tensorflow':
-        configure_tf(FLAGS.use_xla, FLAGS.use_amp)
+        # configure_tf(FLAGS.use_xla, FLAGS.use_amp)
         experiment = experiments.TFExperiment(tokenizer_name=FLAGS.model_name,
                                               data_dir=FLAGS.data_dir,
-                                              max_seq_len=FLAGS.max_seq_len)
+                                              max_seq_len=FLAGS.max_seq_len,
+                                              use_xla=FLAGS.use_xla,
+                                              use_amp=FLAGS.use_amp)
     elif FLAGS.implementation == 'pytorch':
-        # When you're ready, uncomment these lines (assuming your pytorch experiment class is named PTExperiment)
-        # experiment = experiments.PTExperiment(tokenizer_name=FLAGS.model_name,
-        #                                       data_dir=FLAGS.data_dir,
-        #                                       max_seq_len=FLAGS.max_seq_len)
-        raise NotImplementedError('PyTorch support coming soon to a sink near you!')
+        experiment = experiments.PTExperiment(tokenizer_name=FLAGS.model_name,
+                                              data_dir=FLAGS.data_dir,
+                                              max_seq_len=FLAGS.max_seq_len,
+                                              use_amp=FLAGS.use_amp)
     else:
         raise NotImplementedError('Unsupported implementation \"%s\"' % FLAGS.implementation)
 
@@ -92,7 +87,15 @@ def main(argv):
                                      splits=[tfds.Split.TRAIN, tfds.Split.VALIDATION, tfds.Split.TEST])
 
     logging.info('Results:')
-    results = evaluation.evaluate(predictions)
+    evaluator: evaluation.Evaluator
+    if FLAGS.evaluation == 'basic':
+        evaluator = evaluation.BasicEvaluator()
+    elif FLAGS.evaluation == 'nlg':
+        evaluator = evaluation.NlgEvaluator()
+    else:
+        raise NotImplementedError('Unsupported evaluator \"' + FLAGS.evaluation + "\"")
+
+    results = evaluator.evaluate(predictions)
     print(results)
 
 

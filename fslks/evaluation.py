@@ -34,9 +34,9 @@ class BasicEvaluator(Evaluator):
                 results.append([task, split,
                                 w_acc,
                                 bleus[0] * 100.,
-                                rouges['rouge_1/f_score'] * 100.,
-                                rouges['rouge_2/f_score'] * 100.,
-                                rouges['rouge_l/f_score'] * 100.])
+                                rouges['rouge_1/r_score'] * 100.,
+                                rouges['rouge_2/r_score'] * 100.,
+                                rouges['rouge_l/r_score'] * 100.])
 
         return tabulate(results, headers=headers)
 
@@ -82,7 +82,7 @@ class NlgEvaluator(Evaluator):
         return tabulate(results, headers=headers)
 
 
-def evaluate(predictions: Predictions) -> str:
+def auto_evaluate(predictions: Predictions) -> str:
     evaluator: Evaluator
 
     try:
