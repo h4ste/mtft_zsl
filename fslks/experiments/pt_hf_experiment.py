@@ -88,7 +88,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         validation_data = self.load_valid_data(tasks,
                                                batch_size=eval_batch_size or batch_size,
                                                prefetch_size=prefetch_size,
-                                               num_batches=eval_batches).as_numpy_iterator()
+                                               num_batches=eval_batches)
 
         opt = get_optimizer(model)
 
@@ -114,10 +114,12 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         model.zero_grad()
         global_step = 0
         epoch_itr = tqdm.trange(0, num_epochs * steps_per_epoch, desc="Training", )
-        for epoch in range(1, num_epochs):
+        for epoch in range(1, num_epochs + 1):
             running_loss = 0.
+            running_valid_loss = 0.
 
             training_itr = tqdm.tqdm(training_data, desc="Epoch %d" % epoch, initial=1, leave=True, unit=" steps")
+            training_steps = 0
             for step, (inputs, labels, _) in enumerate(training_itr, 1):
                 epoch_itr.update()
                 inputs = {k: torch.from_numpy(v).to(device=self.device, dtype=INPUT_DTYPES[k])
@@ -150,10 +152,33 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                     model.zero_grad()
                     global_step += 1
 
+                training_steps += 1
                 if step == steps_per_epoch:
                     break
 
-            training_itr.set_postfix_str('Global step: %d, loss: %f' % (global_step, running_loss / global_step))
+            valid_steps = 0
+            for step, (inputs, labels, _) in enumerate(validation_data.as_numpy_iterator(), 1):
+                # epoch_itr.update()
+                inputs = {k: torch.from_numpy(v).to(device=self.device, dtype=INPUT_DTYPES[k])
+                          for k, v in inputs.items()}
+                labels = torch.from_numpy(np.squeeze(labels)).to(device=self.device, dtype=torch.long)
+                model.eval()
+                with torch.no_grad():
+                    # Run the forward pass
+                    outputs = model(input_ids=inputs.get('input_ids'),
+                                    attention_mask=inputs.get('attention_mask'),
+                                    token_type_ids=inputs.get('token_type_ids'),
+                                    position_ids=inputs.get('position_ids'),
+                                    head_mask=inputs.get('head_mask'),
+                                    labels=labels)
+                    running_valid_loss += outputs[0].item()
+                valid_steps += 1
+
+            training_itr.set_postfix_str('Global step: %d, tr_loss: %f, val_loss: %f' % (
+                global_step,
+                running_loss / training_steps,
+                running_valid_loss / valid_steps))
+
             training_itr.close()
             logging.get_absl_handler()
         epoch_itr.close()
