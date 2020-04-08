@@ -18,7 +18,6 @@ from cochrane_summ import CochraneSumm
 tasks = ["cochrane_summ", "medlineplus_references", "medlineplus_reviews", "bioasq/single-doc", "bioasq/multi-doc", "ebm", "medinfo", "pubmed_summ"]
 #tasks = ["medline_plus_references", "medline_plus_reviews"]
 #tasks = ["ebm"]
-#tasks = ["medinfo"]
 tasks = [                
     "chiqa/multi-abs-s2a", 
     "chiqa/multi-abs-p2a", 
@@ -31,6 +30,8 @@ tasks = [
 ]
 #tasks = ["pubmed_summ"]
 tasks = ["cochrane_summ"]
+tasks = ["medinfo"]
+tasks = ["pubmed_summ"]
 data_dir = "/data/LHC_kitchensink/tensorflow_datasets/"
 for task in tasks:
     print(task)
@@ -41,5 +42,6 @@ for task in tasks:
     if task == "bioasq/multi-doc" not in task:
         data, info = tfds.load(task, with_info=True, split=tfds.Split.TEST, data_dir=data_dir)
     
-    #print(info)
+    print(info)
     print("Successfully loaded dataset: {}".format(task))
+    print(vars(data))
