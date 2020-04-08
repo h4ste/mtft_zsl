@@ -54,7 +54,7 @@ class Feature(Input):
         self._key = key
 
     def validate(self, info: tfds.core.DatasetInfo) -> None:
-        assert self._key in info.features
+        assert self._key in info.features, "\"%s\" was not a valid feature name!" % self._key
 
     def to_tensor(self, elem: tfds.features.FeaturesDict) -> tf.Tensor:
         return elem[self._key]
@@ -69,7 +69,9 @@ class DictEntry(Input):
         self.entry_mapper = entry_mapper
 
     def validate(self, info: tfds.core.DatasetInfo) -> None:
-        assert self.dict_feature in info.features
+        assert self.dict_feature in info.features, "\"%s\" was not a valid feature name!" % self.dict_feature
+        assert isinstance(info.features[self.dict_feature], tfds.features.FeaturesDict), \
+            "\"%s\" was not a dictionary feature!" % self.dict_feature
 
     def to_tensor(self, elem: tfds.features.FeaturesDict) -> tf.Tensor:
         return self.entry_mapper.to_tensor(elem[self.dict_feature])
@@ -84,7 +86,7 @@ class LabelMapping(Input):
         self.mapping = mapping
 
     def validate(self, info: tfds.core.DatasetInfo) -> None:
-        assert self.label in info.features
+        assert self.label in info.features, "\"%s\" was not a valid feature name!" % self.label
         [input_.validate(info) for input_ in self.mapping.values()]
 
     def to_tensor(self, elem: tfds.features.FeaturesDict) -> tf.Tensor:
@@ -100,7 +102,9 @@ class Sequence(Input):
 
     def validate(self, info: tfds.features.FeaturesDict) -> None:
         if isinstance(self._inputs, str):
-            assert self._inputs in info.features
+            assert self._inputs in info.features, "\"%s\" was not a valid feature name!" % self._inputs
+            assert isinstance(info.features[self._inputs], tfds.features.Sequence), \
+                "\"%s\" was not a Sequence feature" % self._inputs
         elif isinstance(self._inputs, typing.Iterable):
             [input_.validate(info) for input_ in self._inputs]
         else:
