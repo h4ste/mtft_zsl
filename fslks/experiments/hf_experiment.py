@@ -212,15 +212,12 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                 logging.info('Evaluating %s on %s', task, split)
                 inputs = task_data.map(lambda inputs_, targets_, sample_weights: inputs_)
 
-                logits = self.predict_task_split(model, inputs)
-                if logits is None:
+                outputs = self.predict_task_split(model, inputs)
+                if outputs is None:
                     logging.warning('Task %s has no labels for split %s, so it will not be evaluated.',
                                     task, split)
                     continue
 
-                outputs = np.argmax(logits, axis=-1)
-                logging.info('Logits Shape=%s; Logits=%s', logits.shape, logits)
-                logging.info('Outputs Shape=%s; Outputs=%s', outputs.shape, outputs)
                 logging.info("Task %s Split %s Example 1 Predictions: %s", task, split, self.decoder_fn(outputs[0]))
 
                 targets = task_data.map(lambda inputs_, targets_, sample_weights: targets_).as_numpy_iterator()
@@ -232,7 +229,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                     predictions[task]: TaskPredictions = {}
 
                 predictions[task][split] = {
-                    'pred_logits': logits,
+                    # 'pred_logits': logits,
                     'pred_token_ids': outputs,
                     'pred_tokens': list(map(self.decoder_fn, outputs)),
                     'target_token_ids': targets,

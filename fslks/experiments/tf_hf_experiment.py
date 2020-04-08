@@ -11,6 +11,14 @@ from absl import logging
 import transformers
 
 
+def configure_tf(use_xla: bool = False,
+                 use_amp: bool = False) -> None:
+    logging.info(('Enabling' if use_xla else 'Disabling') + ' XLA optimization')
+    tf.config.optimizer.set_jit(use_xla)
+    logging.info(('Enabling' if use_amp else 'Disabling') + ' auto mixed precision (AMP)')
+    tf.config.optimizer.set_experimental_options({'auto_mixed_precision': use_amp})
+
+
 class TransformerOutputWrapper(keras.Model):
 
     def __init__(self, model: transformers.TFPreTrainedModel):
@@ -29,6 +37,11 @@ class TransformerOutputWrapper(keras.Model):
 
 
 class TFExperiment(Experiment[tf.keras.Model]):
+
+    def __init__(self, tokenizer_name: str, data_dir: str, max_seq_len: int,
+                 use_xla: bool = False, use_amp: bool = True):
+        super().__init__(tokenizer_name, data_dir, max_seq_len)
+        configure_tf(use_xla=use_xla, use_amp=use_amp)
 
     def load_model(self, model_name: str) -> tf.keras.Model:
         model_name = model_name
@@ -73,6 +86,9 @@ class TFExperiment(Experiment[tf.keras.Model]):
               eval_batch_size: typing.Optional[int] = None,
               eval_batches: typing.Optional[int] = None,
               checkpoint_file: typing.Optional[str] = None) -> None:
+
+
+
         logging.info('Preparing kitchen sink with %d tasks: %s', len(tasks), tasks)
 
         TFExperiment.compile_model(model, steps_per_epoch)
@@ -128,4 +144,8 @@ class TFExperiment(Experiment[tf.keras.Model]):
                 # We got a different exception type so let python freak out accordingly
                 logging.warning('Encountered error: %s, %s', type(e), e)
                 raise e
-        return np.asarray(logits)
+
+        logging.info('Logits Shape=%s; Logits=%s', logits.shape, logits)
+        outputs = np.argmax(logits, axis=-1)
+        return outputs
+
