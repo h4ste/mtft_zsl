@@ -22,7 +22,7 @@ sink.register('bioasq/multi-doc',
               ]),
               output=sink.Feature('summary'))
 
-sink.register('chiqa/multi-abs-s2a',
+sink.register('chiqa/section2answer_multi_abstractive',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
@@ -30,7 +30,7 @@ sink.register('chiqa/multi-abs-s2a',
               ]),
               output=sink.Feature('summary'))
 
-sink.register('chiqa/multi-abs-p2a',
+sink.register('chiqa/page2answer_multi_abstractive',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
@@ -38,7 +38,7 @@ sink.register('chiqa/multi-abs-p2a',
               ]),
               output=sink.Feature('summary'))
 
-sink.register('chiqa/multi-ext-s2a',
+sink.register('chiqa/section2answer_multi_extractive',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
@@ -46,7 +46,7 @@ sink.register('chiqa/multi-ext-s2a',
               ]),
               output=sink.Feature('summary'))
 
-sink.register('chiqa/multi-ext-p2a',
+sink.register('chiqa/page2answer_multi_extractive',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
@@ -54,7 +54,7 @@ sink.register('chiqa/multi-ext-p2a',
               ]),
               output=sink.Feature('summary'))
 
-sink.register('chiqa/single-abs-s2a',
+sink.register('chiqa/section2answer_single_abstractive',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
@@ -62,7 +62,7 @@ sink.register('chiqa/single-abs-s2a',
               ]),
               output=sink.Feature('summary'))
 
-sink.register('chiqa/single-abs-p2a',
+sink.register('chiqa/page2answer_single_abstractive',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
@@ -70,7 +70,7 @@ sink.register('chiqa/single-abs-p2a',
               ]),
               output=sink.Feature('summary'))
 
-sink.register('chiqa/single-ext-s2a',
+sink.register('chiqa/section2answer_single_extractive',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
@@ -78,7 +78,7 @@ sink.register('chiqa/single-ext-s2a',
               ]),
               output=sink.Feature('summary'))
 
-sink.register('chiqa/single-ext-p2a',
+sink.register('chiqa/page2answer_single_extractive',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
