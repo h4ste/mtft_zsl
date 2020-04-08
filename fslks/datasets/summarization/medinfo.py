@@ -61,7 +61,7 @@ class Medinfo(tfds.core.GeneratorBasedBuilder):
         ]
 
     def _generate_examples(self, path):
-        """Parse and yield medinfo_section2answer_collection.json for single document summarization"""
+        """Parse and yield medinfo for single document summarization"""
         with tf.io.gfile.GFile(path) as f:
             data = json.load(f)
             for i, key in enumerate(data):
