@@ -7,7 +7,8 @@ import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
 
 
-_DESCRIPTION = """The Cochrane plain language summarization single document dataset.
+_DESCRIPTION = """The Cochrane review articles and plain language summarization dataset,
+for single document summarization.
 """
 
 _CITATION ="""Nothing to cite because I stole the data from Wiley publishing"""

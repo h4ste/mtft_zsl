@@ -28,8 +28,6 @@ class ChiqaConfig(tfds.core.BuilderConfig):
 
         Args:
           single_doc: `bool`, for single or multi-doc summarization
-          extractive: `bool`, for extractive or abstractive summarization
-          page2answer: `bool`, for long or short document (pages or passages) summarization
           **kwargs: keyword arguments forwarded to super.
         """
         super(ChiqaConfig, self).__init__(
@@ -85,9 +83,6 @@ class Chiqa(tfds.core.GeneratorBasedBuilder):
     ]
 
     def _info(self):
-        # Article will be single text feature fr single doc
-        # If running multi-doc articles will be provided in a list
-        # Similary for pmids
         if self.builder_config.single_doc:
             source_feature = tfds.features.Text() 
         else: 
@@ -116,7 +111,7 @@ class Chiqa(tfds.core.GeneratorBasedBuilder):
         ]
 
     def _generate_examples(self, path=None):
-        """Parse and yield bioasq_collection.json for single and multi-document summarization"""
+        """Parse and yield MEDIQA-AnS collection"""
         with tf.io.gfile.GFile(path) as f:
             data = json.load(f)
             example_cnt = 0

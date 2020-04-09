@@ -1,5 +1,4 @@
-"""
-Module to create MEDIQA-Answer Summarization tensorflow dataset. 
+"""Module to building BioASQ tensorflow dataset
 """
 import os
 import json
@@ -7,7 +6,7 @@ import json
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
 
-_DESCRIPTION = """MEDIQA-AnS dataset for summarization, available at https://osf.io/fyg46/. See README there for further details.""" 
+_DESCRIPTION = """BioASQ data for single and multi-document summarization""" 
 
 _CITATION = """This work is 100% plagiarized"""
 
@@ -25,7 +24,7 @@ class BioasqConfig(tfds.core.BuilderConfig):
         """Config for Bioasq.
 
         Args:
-          data_dir: `string`, the path to the directory containing the Bioasq collection.
+          single_doc: `bool`, specify single or multi-document summarization
           **kwargs: keyword arguments forwarded to super.
         """
         super(BioasqConfig, self).__init__(
@@ -36,8 +35,6 @@ class BioasqConfig(tfds.core.BuilderConfig):
                     "2.1.0"),
             ],
             **kwargs)
-        # Currently don't need data_dir; leaving it in just in case
-        #self.data_dir = data_dir
         self.single_doc = single_doc
 
 
@@ -55,18 +52,10 @@ class Bioasq(tfds.core.GeneratorBasedBuilder):
             BioasqConfig(
                 name="single-doc",
                 single_doc=True,
-                #data_dir="",
                 description="single document summarization"),
             ]
 
-    #def __init__(self, single_document=True, config=None, version=None, data_dir=None):
-    #    self.single_document = single_document
-    #    super().__init__(data_dir=data_dir, config=config, version=version)
-
     def _info(self):
-        # Article will be single text feature fr single doc
-        # If running multi-doc articles will be provided in a list
-        # Similary for pmids
         if self.builder_config.single_doc:
             source_feature = tfds.features.Text() 
             pmid_feature = tfds.features.Text() 
@@ -90,10 +79,9 @@ class Bioasq(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
         path = dl_manager.manual_dir
-        #path = os.path.join(dl_manager.manual_dir, self.builder_config.data_dir)
-        # There is not test set for multi-doc summarization, 
+        # There is not a test set for multi-doc summarization, 
         # because ideal summaries are not provided by BioASQ 
-        # in test data..
+        # in test data
         if self.builder_config.single_doc:
             return [
                 tfds.core.SplitGenerator(
@@ -114,7 +102,7 @@ class Bioasq(tfds.core.GeneratorBasedBuilder):
             ]
 
     def _generate_examples(self, path=None):
-        """Parse and yield bioasq_collection.json for single and multi-document summarization"""
+        """Parse and yield BioASQ collection"""
         with tf.io.gfile.GFile(path) as f:
             bioasq_data = json.load(f)
             example_cnt = 0
