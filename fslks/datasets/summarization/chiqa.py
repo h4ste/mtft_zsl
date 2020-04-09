@@ -23,8 +23,6 @@ class ChiqaConfig(tfds.core.BuilderConfig):
     @tfds.core.disallow_positional_args
     def __init__(self,
                  single_doc,
-                 extractive,
-                 page2answer,
                  **kwargs):
         """Config for MEDIQA-Ans.
 
@@ -44,8 +42,6 @@ class ChiqaConfig(tfds.core.BuilderConfig):
             **kwargs)
 
         self.single_doc = single_doc
-        self.page2answer = page2answer
-        self.extractive = extractive
 
 
 class Chiqa(tfds.core.GeneratorBasedBuilder):
@@ -57,50 +53,34 @@ class Chiqa(tfds.core.GeneratorBasedBuilder):
             ChiqaConfig(
                 name="section2answer_multi_abstractive", 
                 single_doc=False,
-                extractive=False,
-                page2answer=False,
                 description="multi-document, abstractive, section2answer summarization"),
             ChiqaConfig(
                 name="page2answer_multi_abstractive", 
                 single_doc=False,
-                extractive=False,
-                page2answer=True,
                 description="multi-document, abstractive, page2answer summarization"),
             ChiqaConfig(
                 name="section2answer_multi_extractive", 
                 single_doc=False,
-                extractive=True,
-                page2answer=False,
                 description="multi-document, extractive, section2answer summarization"),
             ChiqaConfig(
                 name="page2answer_multi_extractive", 
                 single_doc=False,
-                extractive=True,
-                page2answer=True,
                 description="multi-document, extractive, page2answer summarization"),
             ChiqaConfig(
                 name="section2answer_single_abstractive", 
                 single_doc=True,
-                extractive=False,
-                page2answer=False,
                 description="single-document, abstractive, section2answer summarization"),
             ChiqaConfig(
                 name="page2answer_single_abstractive", 
                 single_doc=True,
-                extractive=False,
-                page2answer=True,
                 description="single-document, abstractive, page2answer summarization"),
             ChiqaConfig(
                 name="section2answer_single_extractive", 
                 single_doc=True,
-                extractive=True,
-                page2answer=False,
                 description="single-document, extractive, section2answer summarization"),
             ChiqaConfig(
                 name="page2answer_single_extractive", 
                 single_doc=True,
-                extractive=True,
-                page2answer=True,
                 description="single-document, extractive, page2answer summarization"),
     ]
 
