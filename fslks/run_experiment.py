@@ -1,11 +1,8 @@
+# We need to set this variable to shut-up TensorFlow's C++ logging messages
 import os
-
-# Make TensorFlow print less obnoxious C logging messages
-# (must be set before tensorflow is imported!)
-
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-import tensorflow as tf
+import importlib
 import tensorflow_datasets.public_api as tfds
 
 from absl import flags
@@ -22,6 +19,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_spaceseplist("tasks", None, "One or more tasks to be used for pretraining")
 
 flags.DEFINE_integer('num_epochs', 3, 'Number of epochs to train')
+flags.DEFINE_integer('warmup_epochs', 3, 'Number of warmup epochs before normal training')
 flags.DEFINE_integer('batch_size', 128, 'Batch size to use for training')
 flags.DEFINE_integer('prefetch_size', 10, 'Number of batches to prefetch')
 flags.DEFINE_integer('eval_batch_size', 128, 'Batch size to use when evaluating validation/test sets')
@@ -42,6 +40,7 @@ flags.DEFINE_enum('evaluation', default='basic', enum_values=['basic', 'nlg'],
                   help='method to use for evaluating model performance')
 
 
+# noinspection PyUnusedLocal
 def main(argv):
     del argv  # Unused.
 
@@ -59,7 +58,8 @@ def main(argv):
         experiment = experiments.PTExperiment(tokenizer_name=FLAGS.model_name,
                                               data_dir=FLAGS.data_dir,
                                               max_seq_len=FLAGS.max_seq_len,
-                                              use_amp=FLAGS.use_amp)
+                                              use_amp=FLAGS.use_amp,
+                                              warmup_epochs=FLAGS.warmup_epochs)
     else:
         raise NotImplementedError('Unsupported implementation \"%s\"' % FLAGS.implementation)
 
@@ -91,7 +91,8 @@ def main(argv):
     if FLAGS.evaluation == 'basic':
         evaluator = evaluation.BasicEvaluator()
     elif FLAGS.evaluation == 'nlg':
-        evaluator = evaluation.NlgEvaluator()
+        nlg_eval = importlib.import_module('nlgeval')
+        evaluator = evaluation.NlgEvaluator(nlg=nlg_eval.NLGEval())
     else:
         raise NotImplementedError('Unsupported evaluator \"' + FLAGS.evaluation + "\"")
 

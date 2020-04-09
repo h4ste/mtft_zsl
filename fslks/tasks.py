@@ -12,7 +12,7 @@ sink.register('bioasq',
                   sink.Feature('question'),
                   sink.Feature('article')
               ]),
-              output=sink.Feature('summary'))
+              target=sink.Feature('summary'))
 
 sink.register('chiqa',
               prompt=sink.Constant('summarize'),
@@ -20,7 +20,7 @@ sink.register('chiqa',
                   sink.Feature('question'),
                   sink.Feature('article')
               ]),
-              output=sink.Feature('summary'))
+              target=sink.Feature('summary'))
 
 sink.register('ebm',
               prompt=sink.Constant('summarize'),
@@ -29,7 +29,7 @@ sink.register('ebm',
                   sink.Feature('article'),
                   sink.Feature('pmids')
               ]),
-              output=sink.Feature('summary'))
+              target=sink.Feature('summary'))
 
 sink.register('medlineplus_references',
               prompt=sink.Constant('summarize'),
@@ -38,7 +38,7 @@ sink.register('medlineplus_references',
                   sink.Feature('medlineplus_url'),
                   sink.Feature('reference_urls')
               ]),
-              output=sink.Feature('summary'))
+              target=sink.Feature('summary'))
 
 sink.register('medlineplus_reviews',
               prompt=sink.Constant('summarize'),
@@ -47,7 +47,7 @@ sink.register('medlineplus_reviews',
                   sink.Feature('url'),
                   sink.Feature('pmids')
               ]),
-              output=sink.Feature('summary'))
+              target=sink.Feature('summary'))
 
 sink.register('medinfo',
               prompt=sink.Constant('summarize'),
@@ -55,7 +55,7 @@ sink.register('medinfo',
                   sink.Feature('question'),
                   sink.Feature('article')
               ]),
-              output=sink.Feature('summary'))
+              target=sink.Feature('summary'))
 
 sink.register('pubmed',
               prompt=sink.Constant('summarize'),
@@ -65,7 +65,7 @@ sink.register('pubmed',
                   sink.Feature('pubdate'),
                   sink.Feature('pmid')
               ]),
-              output=sink.Feature('summary'))
+              target=sink.Feature('summary'))
 
 sink.register('cochrane_summ',
               prompt=sink.Constant('summarize'),
@@ -73,22 +73,22 @@ sink.register('cochrane_summ',
                   sink.Feature('summary'),
                   sink.Feature('article')
               ]),
-              output=sink.Feature('summary'))
+              target=sink.Feature('summary'))
 
 sink.register('scientific_papers',
               prompt=sink.Constant('summarize'),
               input=sink.Feature('article'),
-              output=sink.Feature('abstract'))
+              target=sink.Feature('abstract'))
 
 sink.register('movie_rationales',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence('evidences'),
-              output=sink.Feature('review'))
+              target=sink.Feature('review'))
 
 sink.register('cnn_dailymail',
               prompt=sink.Constant('summarize'),
               input=sink.Feature('article'),
-              output=sink.Feature('highlights'))
+              target=sink.Feature('highlights'))
 
 sink.register('super_glue/copa',
               prompt=sink.Sequence([
@@ -100,7 +100,7 @@ sink.register('super_glue/copa',
                   sink.Feature('choice1'),
                   sink.Feature('choice2'),
               ]),
-              output=sink.LabelMapping('label', {
+              target=sink.LabelMapping('label', {
                   0: sink.Feature('choice1'),
                   1: sink.Feature('choice2')
               }))
@@ -117,7 +117,7 @@ sink.register('evi_conv',
                   sink.DictEntry('evidence_2', _eviconv_stance_mapping),
                   sink.DictEntry('evidence_2', sink.Feature('text')),
               ]),
-              output=sink.LabelMapping('label', {
+              target=sink.LabelMapping('label', {
                   0: sink.DictEntry('evidence_1', sink.Feature('text')),
                   1: sink.DictEntry('evidence_2', sink.Feature('text'))
               }))

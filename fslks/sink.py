@@ -11,7 +11,7 @@ from tensorflow_datasets.core.registered import DatasetNotFoundError
 __SINK = {}
 
 SEP = ' '
-PROMPT_END = ' :'
+PROMPT_END = ':'
 
 
 class LabelError(Exception):
@@ -132,7 +132,7 @@ class Sequence(Input):
             raise ValueError
 
 
-def register(dataset_name: str, prompt: Input, input: Input, output: Input):
+def register(dataset_name: str, prompt: Input, input: Input, target: Input):
     try:
         builder = tfds.builder(dataset_name)
     except DatasetNotFoundError:
@@ -141,7 +141,7 @@ def register(dataset_name: str, prompt: Input, input: Input, output: Input):
 
     info = builder.info
 
-    for text in [prompt, input, output]:
+    for text in [prompt, input, target]:
         text.validate(info)
 
     def make_conversion_fn(encoder_fn, decoder_fn=None):
@@ -161,14 +161,14 @@ def register(dataset_name: str, prompt: Input, input: Input, output: Input):
                 ))
 
             try:
-                outputs = encoder_fn(output.to_str(elem))['input_ids']
+                outputs = encoder_fn(target.to_str(elem))['input_ids']
                 outputs = np.expand_dims(outputs, -1)
             except tf.errors.UnknownError:
                 raise LabelError()
             if idx == 0 and decoder_fn is not None:
                 logging.info('Task %s Example %d Input: %s', dataset_name, idx + 1, decoder_fn(ex['input_ids']))
                 # logging.debug('Task %s Example %d Input Features: %s', dataset_name, idx + 1, ex)
-                logging.info('Task %s Example %d Output: %s', dataset_name, idx + 1, decoder_fn(outputs))
+                logging.info('Task %s Example %d Target: %s', dataset_name, idx + 1, decoder_fn(outputs))
 
             sample_weight = ex['attention_mask']
             return ex, outputs, sample_weight

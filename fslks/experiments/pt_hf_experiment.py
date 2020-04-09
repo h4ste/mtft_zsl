@@ -4,7 +4,10 @@ import numpy as np
 import tensorflow as tf
 import torch
 import torch.nn
+from torch.optim.optimizer import Optimizer
+
 import tqdm.auto as tqdm
+
 import transformers
 from absl import logging
 
@@ -22,8 +25,8 @@ INPUT_DTYPES = {
 def get_optimizer(model: torch.nn.Module,
                   weight_decay: float = 0.,
                   lr: float = 5e-5,
-                  epsilon: float = 1e-8) -> torch.optim.Optimizer:
-    # Prepare optimizer and schedule (linear warmup and decay)
+                  epsilon: float = 1e-8) -> Optimizer:
+    # Prepare optimizer for weight decay
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
@@ -44,10 +47,12 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                  data_dir: str,
                  # checksum_dir: str,
                  max_seq_len: int,
+                 warmup_epochs: int = 3,
                  max_grad_norm: int = 1,
                  gradient_accumulation_steps: int = 1,
                  use_amp: bool = True):
         super().__init__(tokenizer_name=tokenizer_name, data_dir=data_dir, max_seq_len=max_seq_len)
+        self.warmup_epochs = warmup_epochs
         self.max_grad_norm = max_grad_norm
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.use_amp = use_amp
@@ -66,6 +71,40 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             model = transformers.AutoModelWithLMHead.from_pretrained(model_name)
 
         return model
+
+    def get_forward_params(self, model,
+                           inputs: typing.Mapping[str, np.ndarray],
+                           labels: typing.Optional[np.ndarray] = None) -> typing.Mapping[str, torch.Tensor]:
+        # Okay, so, each model in HuggingFace has an associated tokenizer. The tokenizer is supposed to
+        # return only the inputs that the associated model wants. Unfortunately, it absolutely does *NOT*
+        # do this. Moreover, it doesn't even return outputs in the correct types, expected by the models,
+        # so we need to iterate through all the tensors returned by the tokenizer (i.e., inputs) and
+        # (a) check if they are in the signature of the model's forward method (gross)
+        # and then (b) cast them to the correct type and put them on the GPU
+        forward_arg_names = model.forward.__code__.co_varnames
+
+        params = {k: torch.from_numpy(v).to(device=self.device, dtype=INPUT_DTYPES[k])
+                  for k, v in inputs.items()
+                  if k in forward_arg_names}
+
+        if labels is not None:
+            labels = torch.from_numpy(np.squeeze(labels)).to(device=self.device, dtype=torch.long)
+
+            # We have to do similar gymnastics because the models like to arbitrary rename their "labels" parameter
+            if 'labels' in forward_arg_names:
+                params['labels'] = labels
+            elif 'lm_labels' in forward_arg_names:
+                params['lm_labels'] = labels
+            else:
+                raise ValueError('Forward method of %s did not have argument labels or lm_labels, only: %s' % (
+                    model, forward_arg_names))
+        else:
+            if isinstance(model, transformers.T5ForConditionalGeneration):
+                # We are dealing with T5 so we need to rename inputs
+                params['decoder_input_ids'] = params['input_ids']
+                params['decoder_attention_mask'] = params['attention_mask']
+
+        return params
 
     def train(self,
               model: transformers.PreTrainedModel,
@@ -90,7 +129,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                                                prefetch_size=prefetch_size,
                                                num_batches=eval_batches)
 
-        opt = get_optimizer(model)
+        opt: Optimizer = get_optimizer(model)
 
         if self.use_amp:
             try:
@@ -98,14 +137,12 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             except ImportError:
                 raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
             model: transformers.PreTrainedModel
-            opt: torch.optim.Optimizer
             model, opt = amp.initialize(model, opt, opt_level='O1')
 
-        warmup_epochs = 3
-        num_epochs += warmup_epochs
+        num_epochs += self.warmup_epochs
         scheduler = transformers.get_linear_schedule_with_warmup(
             optimizer=opt,
-            num_warmup_steps=warmup_epochs * steps_per_epoch,
+            num_warmup_steps=self.warmup_epochs * steps_per_epoch,
             num_training_steps=num_epochs * steps_per_epoch
         )
 
@@ -122,19 +159,10 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             training_steps = 0
             for step, (inputs, labels, _) in enumerate(training_itr, 1):
                 epoch_itr.update()
-                inputs = {k: torch.from_numpy(v).to(device=self.device, dtype=INPUT_DTYPES[k])
-                          for k, v in inputs.items()}
-                labels = torch.from_numpy(np.squeeze(labels)).to(device=self.device, dtype=torch.long)
                 model.train()
 
                 # Run the forward pass
-                outputs = model(input_ids=inputs.get('input_ids'),
-                                attention_mask=inputs.get('attention_mask'),
-                                token_type_ids=inputs.get('token_type_ids'),
-                                position_ids=inputs.get('position_ids'),
-                                head_mask=inputs.get('head_mask'),
-                                labels=labels)
-                loss = outputs[0]
+                loss = model(**self.get_forward_params(model, inputs, labels))[0]
 
                 # Run the backwards pass
                 if self.use_amp:
@@ -146,7 +174,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                 running_loss += loss.item()
                 if step % self.gradient_accumulation_steps == 0:
                     params = amp.master_params(opt) if self.use_amp else model.parameters()
-                    torch.nn.utils.clip_grad_norm(params, self.max_grad_norm)
+                    torch.nn.utils.clip_grad_norm_(params, self.max_grad_norm)
                     opt.step()
                     scheduler.step()
                     model.zero_grad()
@@ -158,20 +186,11 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
 
             valid_steps = 0
             for step, (inputs, labels, _) in enumerate(validation_data.as_numpy_iterator(), 1):
-                # epoch_itr.update()
-                inputs = {k: torch.from_numpy(v).to(device=self.device, dtype=INPUT_DTYPES[k])
-                          for k, v in inputs.items()}
-                labels = torch.from_numpy(np.squeeze(labels)).to(device=self.device, dtype=torch.long)
                 model.eval()
                 with torch.no_grad():
                     # Run the forward pass
-                    outputs = model(input_ids=inputs.get('input_ids'),
-                                    attention_mask=inputs.get('attention_mask'),
-                                    token_type_ids=inputs.get('token_type_ids'),
-                                    position_ids=inputs.get('position_ids'),
-                                    head_mask=inputs.get('head_mask'),
-                                    labels=labels)
-                    running_valid_loss += outputs[0].item()
+                    loss = model(**self.get_forward_params(model, inputs, labels))[0]
+                    running_valid_loss += loss.item()
                 valid_steps += 1
 
             training_itr.set_postfix_str('Global step: %d, tr_loss: %f, val_loss: %f' % (
@@ -180,21 +199,22 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                 running_valid_loss / valid_steps if valid_steps > 0 else 'NaN'))
 
             training_itr.close()
-            logging.get_absl_handler()
         epoch_itr.close()
 
-    def predict_task_split(self, model: transformers.PreTrainedModel, inputs: tf.data.Dataset) -> typing.Optional[
-        np.ndarray]:
+    def predict_task_split(self, model: transformers.PreTrainedModel, inputs: tf.data.Dataset) -> \
+            typing.Optional[np.ndarray]:
         try:
             outputs = []
-            model.eval()
-            for batch in inputs.as_numpy_iterator():
+            for batch_inputs in inputs.as_numpy_iterator():
                 with torch.no_grad():
-                    batch_inputs = torch.from_numpy(batch['input_ids']).to(device=self.device, dtype=torch.long)
-                    batch_outputs = model(input_ids=batch_inputs)
-                    batch_outputs = batch_outputs[0].detach().cpu().numpy()
-                    batch_outputs = np.argmax(batch_outputs, axis=-1)
-                    # batch_outputs = np.asarray([outputs.detach().cpu().numpy() for outputs in batch_outputs])
+                    model.eval()
+                    # logging.debug('Batch inputs: %s', batch_inputs)
+                    forward_params = self.get_forward_params(model, batch_inputs)
+                    # logging.debug('Forward params: %s', forward_params)
+                    batch_logits = model(**forward_params)[0]
+                    # Pull the logits out of torch's graph
+                    batch_logits = batch_logits.detach().cpu().numpy()
+                    batch_outputs = np.argmax(batch_logits, axis=-1)
                     outputs.append(batch_outputs)
         # We can't just except tf.errors.UnknownError, because it is thrown as some sort of weird proxy
         # instance of a tf.errors.UnknownError and python's pattern matching can't handle the scandal

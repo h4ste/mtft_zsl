@@ -27,11 +27,13 @@ INPUT_TYPES: typing.Mapping[str, tf.dtypes.DType] = {
     "token_type_ids": tf.int32
 }
 
-# Type type of output expected from the Transformer
+# Type type of target expected from the Transformer
 OUTPUT_TYPE: tf.dtypes.DType = tf.int32
 
 # Type of sample weights
 SAMPLE_WEIGHT_TYPE: tf.dtypes.DType = tf.float32
+
+LOG_EXAMPLES: int = 1
 
 
 def concatenate(datasets: typing.Iterable[tf.data.Dataset]):
@@ -81,7 +83,6 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                                        add_space_before_punct_symbol=True,
                                        max_length=self.max_seq_len,
                                        pad_to_max_length=True,
-                                       return_attention_mask=True,
                                        truncation_strategy="only_first")
 
         decoder_fn = functools.partial(tokenizer.decode, skip_special_tokens=True)
@@ -145,26 +146,21 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         return training_data.prefetch(prefetch_size)
 
     def load_valid_data(self,
-                        tasks: typing.Sequence[str],
+                        tasks: typing.Iterable[str],
                         batch_size: int,
                         prefetch_size: int,
                         num_batches: typing.Optional[int] = None) -> tf.data.Dataset:
         logging.debug('Loading validation data...')
         validation_data = []
         for task in tasks:
-            try:
+            if self.split_in_dataset(tfds.Split.VALIDATION, task):
                 task_data = self.load_task_data(task, tfds.Split.VALIDATION).batch(batch_size, drop_remainder=True)
                 if num_batches:
                     task_data = task_data.take(num_batches)
-            except ValueError as e:
-                if str(e).startswith('Unknown split "validation"'):
-                    # This is a ValueError indicating there is no validation split, so return nothing
-                    logging.warning('Task %s has no validation split, so it will not be used for validation.', task)
-                    continue
-                else:
-                    # This is some other ValueError and so should probably crash
-                    raise e
-            validation_data.append(task_data)
+                validation_data.append(task_data)
+            else:
+                # This is a ValueError indicating there is no validation split, so return nothing
+                logging.warning('Task %s has no validation split, so it will not be used for validation.', task)
 
         return concatenate(validation_data).prefetch(prefetch_size)
 
@@ -191,20 +187,27 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                 splits: typing.Iterable[tfds.Split],
                 eval_batch_size: int,
                 eval_batches: typing.Optional[int] = None) -> Predictions:
+        decoder_fn = functools.partial(self.decoder_fn, clean_up_tokenization_spaces=True)
+
         predictions: Predictions = {}
+
         for task in tasks:
             for split in splits:
-                try:
-                    task_data = self.load_task_data(task, split=split).batch(eval_batch_size, drop_remainder=False)
-                except ValueError as e:
-                    if str(e).startswith('Unknown split'):
-                        # This is a ValueError indicating there is no validation split, so return nothing
-                        logging.warning('Task %s has no %s split, so it will not be evaluated.',
-                                        task, split)
-                        continue
-                    else:
-                        # This is some other ValueError so we should probably crash
-                        raise e
+                if not self.split_in_dataset(split, task):
+                    logging.warning('Task %s has no %s split, so it will not be evaluated.',
+                                    task, split)
+                    continue
+                # try:
+                task_data = self.load_task_data(task, split=split).batch(eval_batch_size, drop_remainder=False)
+                # except ValueError as e:
+                #     if str(e).startswith('Unknown split'):
+                #         # This is a ValueError indicating there is no validation split, so return nothing
+                #         logging.warning('Task %s has no %s split, so it will not be evaluated.',
+                #                         task, split)
+                #         continue
+                #     else:
+                #         # This is some other ValueError so we should probably crash
+                #         raise e
 
                 if eval_batches:
                     task_data = task_data.take(eval_batches)
@@ -218,12 +221,18 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                                     task, split)
                     continue
 
-                logging.info("Task %s Split %s Example 1 Predictions: %s", task, split, self.decoder_fn(outputs[0]))
-
                 targets = task_data.map(lambda inputs_, targets_, sample_weights: targets_).as_numpy_iterator()
                 targets = np.concatenate(list(targets), axis=0)
                 targets = np.squeeze(targets)
-                logging.info("Task %s Split %s Example 1 Targets: %s", task, split, self.decoder_fn(targets[0]))
+
+                input_ids = (ids for inputs_ in inputs.as_numpy_iterator() for ids in inputs_['input_ids'])
+                for i, (inputs_, outputs_, targets_) in enumerate(zip(input_ids, outputs, targets), start=1):
+                    if i > LOG_EXAMPLES:
+                        break
+
+                    logging.info("Task %s[%s] Example %d Prompt: %s", task, split, i, decoder_fn(inputs_))
+                    logging.info("Task %s[%s] Example %d Outputs: %s", task, split, i, decoder_fn(outputs_))
+                    logging.info("Task %s[%s] Example %d Targets: %s", task, split, i, decoder_fn(targets_))
 
                 if task not in predictions:
                     predictions[task]: TaskPredictions = {}
@@ -231,8 +240,8 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                 predictions[task][split] = {
                     # 'pred_logits': logits,
                     'pred_token_ids': outputs,
-                    'pred_tokens': list(map(self.decoder_fn, outputs)),
+                    'pred_tokens': [decoder_fn(output_) for output_ in outputs],
                     'target_token_ids': targets,
-                    'target_tokens': list(map(self.decoder_fn, targets))
+                    'target_tokens': [decoder_fn(targets_) for targets_ in targets],
                 }
         return predictions

@@ -88,10 +88,7 @@ class TFExperiment(Experiment[tf.keras.Model]):
               eval_batches: typing.Optional[int] = None,
               checkpoint_file: typing.Optional[str] = None) -> None:
 
-
-
         logging.info('Preparing kitchen sink with %d tasks: %s', len(tasks), tasks)
-
         TFExperiment.compile_model(model, steps_per_epoch)
 
         # Stop training if validation loss fails to decrease for 3 epochs
@@ -123,7 +120,7 @@ class TFExperiment(Experiment[tf.keras.Model]):
                                                    prefetch_size=prefetch_size,
                                                    num_batches=eval_batches)
         else:
-            validation_tasks = None
+            validation_data = None
 
         history = model.fit(x=training_data,
                             validation_data=validation_data,
@@ -153,4 +150,3 @@ class TFExperiment(Experiment[tf.keras.Model]):
         logging.info('Logits Shape=%s; Logits=%s', logits.shape, logits)
         outputs = np.argmax(logits, axis=-1)
         return outputs
-

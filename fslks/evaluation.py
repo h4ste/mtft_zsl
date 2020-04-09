@@ -26,11 +26,19 @@ class BasicEvaluator(Evaluator):
 
         for task, task_predictions in predictions.items():
             for split, split_predictions in task_predictions.items():
-                targets = split_predictions['target_tokens']
-                predictions = split_predictions['pred_tokens']
-                w_acc = eval.word_accuracy(targets, predictions)
-                bleus = eval.bleu(targets, predictions)
-                rouges = eval.rouge(targets, predictions)
+                targets = [*map(str.split, split_predictions['target_tokens'])]
+                predictions = [*map(str.split, split_predictions['pred_tokens'])]
+                assert len(targets) == len(predictions), \
+                    "%s[%s] only had %d predictions for %d targets!" % (task, split, len(targets), len(predictions))
+                for idx, (target_, prediction_) in enumerate(zip(targets, predictions)):
+                    assert len(target_) > 0, "Targets were empty for %s[%s] #%d" % (task, split, idx)
+                    if len(prediction_) == 0:
+                        logging.warning("Predictions were empty for %s[%s] #%d, setting predictions to [_UNK]",
+                                        task, split, idx)
+                        predictions[idx] = ['_UNK']
+                w_acc = eval.word_accuracy(references=targets, predictions=predictions)
+                bleus = eval.bleu(target_corpus=targets, predicted_corpus=predictions)
+                rouges = eval.rouge(references=targets, hypotheses=predictions)
                 results.append([task, split,
                                 w_acc,
                                 bleus[0] * 100.,
