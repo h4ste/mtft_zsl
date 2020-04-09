@@ -86,10 +86,19 @@ sink.register('chiqa/page2answer_single_extractive',
               ]),
               output=sink.Feature('summary'))
 
-sink.register('ebm',
+sink.register('ebm/answer',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
+                  sink.Sequence('article')
+              ]),
+              output=sink.Feature('summary'))
+
+sink.register('ebm/justify',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Feature('answer'),
                   sink.Sequence('article')
               ]),
               output=sink.Feature('summary'))
