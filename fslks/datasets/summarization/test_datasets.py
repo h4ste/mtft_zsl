@@ -17,7 +17,6 @@ from cochrane_summ import CochraneSumm
 
 tasks = ["cochrane_summ", "medlineplus_references", "medlineplus_reviews", "bioasq/single-doc", "bioasq/multi-doc", "ebm", "medinfo", "pubmed_summ"]
 #tasks = ["medline_plus_references", "medline_plus_reviews"]
-#tasks = ["ebm"]
 tasks = [                
     "chiqa/multi-abs-s2a", 
     "chiqa/multi-abs-p2a", 
@@ -28,10 +27,10 @@ tasks = [
     "chiqa/single-ext-s2a", 
     "chiqa/single-ext-p2a", 
 ]
-#tasks = ["pubmed_summ"]
 tasks = ["cochrane_summ"]
 tasks = ["medinfo"]
 tasks = ["pubmed_summ"]
+tasks = ["ebm/answer", "ebm/justify"]
 data_dir = "/data/LHC_kitchensink/tensorflow_datasets/"
 for task in tasks:
     print(task)
