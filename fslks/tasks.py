@@ -1,10 +1,8 @@
 from fslks import sink
-
-# noinspection PyUnresolvedReferences
-from fslks.datasets.summarization import *
-
 # noinspection PyUnresolvedReferences
 from fslks.datasets.argumentation import *
+# noinspection PyUnresolvedReferences
+from fslks.datasets.summarization import *
 
 sink.register('bioasq/single-doc',
               prompt=sink.Constant('summarize'),
@@ -151,12 +149,14 @@ sink.register('cnn_dailymail',
 
 sink.register('super_glue/copa',
               prompt=sink.Sequence([
-                  sink.Constant('choose'),
+                  sink.Feature('premise'),
+                  sink.Constant('choose:'),
                   sink.Feature('question'),
               ]),
               input=sink.Sequence([
-                  sink.Feature('premise'),
+                  sink.Constant('1:'),
                   sink.Feature('choice1'),
+                  sink.Constant('2:'),
                   sink.Feature('choice2'),
               ]),
               target=sink.LabelMapping('label', {
@@ -169,10 +169,12 @@ _eviconv_stance_mapping = sink.LabelMapping('stance', {
     1: sink.Constant('CON:'),
 })
 sink.register('evi_conv',
-              prompt=sink.Constant('argue'),
+              prompt=sink.Constant('argue: choose'),
               input=sink.Sequence([
+                  sink.Constant('1:'),
                   sink.DictEntry('evidence_1', _eviconv_stance_mapping),
                   sink.DictEntry('evidence_1', sink.Feature('text')),
+                  sink.Constant('2:'),
                   sink.DictEntry('evidence_2', _eviconv_stance_mapping),
                   sink.DictEntry('evidence_2', sink.Feature('text')),
               ]),
