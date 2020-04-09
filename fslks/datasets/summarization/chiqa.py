@@ -23,8 +23,6 @@ class ChiqaConfig(tfds.core.BuilderConfig):
     @tfds.core.disallow_positional_args
     def __init__(self,
                  single_doc,
-                 extractive,
-                 page2answer,
                  **kwargs):
         """Config for MEDIQA-Ans.
 
@@ -44,8 +42,6 @@ class ChiqaConfig(tfds.core.BuilderConfig):
             **kwargs)
 
         self.single_doc = single_doc
-        self.page2answer = page2answer
-        self.extractive = extractive
 
 
 class Chiqa(tfds.core.GeneratorBasedBuilder):
@@ -55,52 +51,36 @@ class Chiqa(tfds.core.GeneratorBasedBuilder):
 
     BUILDER_CONFIGS = [
             ChiqaConfig(
-                name="multi-abs-s2a", 
+                name="section2answer_multi_abstractive", 
                 single_doc=False,
-                extractive=False,
-                page2answer=False,
                 description="multi-document, abstractive, section2answer summarization"),
             ChiqaConfig(
-                name="multi-abs-p2a", 
+                name="page2answer_multi_abstractive", 
                 single_doc=False,
-                extractive=False,
-                page2answer=True,
                 description="multi-document, abstractive, page2answer summarization"),
             ChiqaConfig(
-                name="multi-ext-s2a", 
+                name="section2answer_multi_extractive", 
                 single_doc=False,
-                extractive=True,
-                page2answer=False,
                 description="multi-document, extractive, section2answer summarization"),
             ChiqaConfig(
-                name="multi-ext-p2a", 
+                name="page2answer_multi_extractive", 
                 single_doc=False,
-                extractive=True,
-                page2answer=True,
                 description="multi-document, extractive, page2answer summarization"),
             ChiqaConfig(
-                name="single-abs-s2a", 
+                name="section2answer_single_abstractive", 
                 single_doc=True,
-                extractive=False,
-                page2answer=False,
                 description="single-document, abstractive, section2answer summarization"),
             ChiqaConfig(
-                name="single-abs-p2a", 
+                name="page2answer_single_abstractive", 
                 single_doc=True,
-                extractive=False,
-                page2answer=True,
                 description="single-document, abstractive, page2answer summarization"),
             ChiqaConfig(
-                name="single-ext-s2a", 
+                name="section2answer_single_extractive", 
                 single_doc=True,
-                extractive=True,
-                page2answer=False,
                 description="single-document, extractive, section2answer summarization"),
             ChiqaConfig(
-                name="single-ext-p2a", 
+                name="page2answer_single_extractive", 
                 single_doc=True,
-                extractive=True,
-                page2answer=True,
                 description="single-document, extractive, page2answer summarization"),
     ]
 
@@ -132,7 +112,7 @@ class Chiqa(tfds.core.GeneratorBasedBuilder):
                 tfds.core.SplitGenerator(
                     name=tfds.Split.TEST,
                     gen_kwargs={
-                        "path": os.path.join(path, "mediqa_ans_test_collection.json")}),
+                        "path": os.path.join(path, "{}_summ.json".format(self.builder_config.name))}),
         ]
 
     def _generate_examples(self, path=None):
@@ -154,7 +134,7 @@ class Chiqa(tfds.core.GeneratorBasedBuilder):
                     articles = []
                     example_cnt += 1
                     for answer_id in data[example]['articles']:
-                        articles.append(data[example]['articles']['article_id'][0]),
+                        articles.append(data[example]['articles'][answer_id][0]),
                     yield example_cnt, {
                         'article': articles,
                         'summary': data[example]['summary'],

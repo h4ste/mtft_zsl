@@ -6,7 +6,7 @@ from fslks.datasets.summarization import *
 # noinspection PyUnresolvedReferences
 from fslks.datasets.argumentation import *
 
-sink.register('bioasq',
+sink.register('bioasq/single-doc',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
@@ -14,7 +14,47 @@ sink.register('bioasq',
               ]),
               target=sink.Feature('summary'))
 
-sink.register('chiqa',
+sink.register('bioasq/multi-doc',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Sequence('article')
+              ]),
+              target=sink.Feature('summary'))
+
+sink.register('chiqa/section2answer_multi_abstractive',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Sequence('article')
+              ]),
+              target=sink.Feature('summary'))
+
+sink.register('chiqa/page2answer_multi_abstractive',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Sequence('article')
+              ]),
+              target=sink.Feature('summary'))
+
+sink.register('chiqa/section2answer_multi_extractive',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Sequence('article')
+              ]),
+              target=sink.Feature('summary'))
+
+sink.register('chiqa/page2answer_multi_extractive',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Sequence('article')
+              ]),
+              target=sink.Feature('summary'))
+
+sink.register('chiqa/section2answer_single_abstractive',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
@@ -22,31 +62,55 @@ sink.register('chiqa',
               ]),
               target=sink.Feature('summary'))
 
-sink.register('ebm',
+sink.register('chiqa/page2answer_single_abstractive',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
-                  sink.Feature('article'),
-                  sink.Feature('pmids')
+                  sink.Feature('article')
+              ]),
+              target=sink.Feature('summary'))
+
+sink.register('chiqa/section2answer_single_extractive',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Feature('article')
+              ]),
+              target=sink.Feature('summary'))
+
+sink.register('chiqa/page2answer_single_extractive',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Feature('article')
+              ]),
+              target=sink.Feature('summary'))
+
+sink.register('ebm/answer',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Sequence('article')
+              ]),
+              target=sink.Feature('summary'))
+
+sink.register('ebm/justify',
+              prompt=sink.Constant('summarize'),
+              input=sink.Sequence([
+                  sink.Feature('question'),
+                  sink.Feature('answer'),
+                  sink.Sequence('article')
               ]),
               target=sink.Feature('summary'))
 
 sink.register('medlineplus_references',
               prompt=sink.Constant('summarize'),
-              input=sink.Sequence([
-                  sink.Feature('article'),
-                  sink.Feature('medlineplus_url'),
-                  sink.Feature('reference_urls')
-              ]),
+              input=sink.Sequence('article'),
               target=sink.Feature('summary'))
 
 sink.register('medlineplus_reviews',
               prompt=sink.Constant('summarize'),
-              input=sink.Sequence([
-                  sink.Feature('article'),
-                  sink.Feature('url'),
-                  sink.Feature('pmids')
-              ]),
+              input=sink.Sequence('article'),
               target=sink.Feature('summary'))
 
 sink.register('medinfo',
@@ -57,22 +121,17 @@ sink.register('medinfo',
               ]),
               target=sink.Feature('summary'))
 
-sink.register('pubmed',
+sink.register('pubmed_summ',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
-                  sink.Feature('article'),
                   sink.Feature('title'),
-                  sink.Feature('pubdate'),
-                  sink.Feature('pmid')
+                  sink.Feature('article')
               ]),
               target=sink.Feature('summary'))
 
 sink.register('cochrane_summ',
               prompt=sink.Constant('summarize'),
-              input=sink.Sequence([
-                  sink.Feature('summary'),
-                  sink.Feature('article')
-              ]),
+              input=sink.Feature('article'),
               target=sink.Feature('summary'))
 
 sink.register('scientific_papers',
