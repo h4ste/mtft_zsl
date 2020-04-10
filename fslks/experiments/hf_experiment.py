@@ -36,6 +36,26 @@ SAMPLE_WEIGHT_TYPE: tf.dtypes.DType = tf.float32
 LOG_EXAMPLES: int = 1
 
 
+class Task(object):
+    dataset: str
+    split: typing.Union[str, tfds.Split, None]
+
+    def __init__(self, dataset: str, split: typing.Union[str, tfds.Split, None]):
+        self.dataset = dataset
+        self.split = split
+
+    @classmethod
+    def parse(cls, string: str):
+        """Parses a command-line specified task and split string to determine the dataset and optionally the split
+        e.g., "super_glue/copa" -> Task(dataset="super_glue/copa", split=None)
+              "super_glue/copa::train" -> Task(dataset="super_glue/copa", split="train")
+        :param string: task and split string,
+        :return: a new Task object
+        """
+        raise NotImplementedError('Max should implement me!')
+
+
+
 def concatenate(datasets: typing.Iterable[tf.data.Dataset]):
     dataset_itr = iter(datasets)
 
