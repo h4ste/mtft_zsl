@@ -16,7 +16,9 @@ from fslks import experiments
 from fslks import evaluation
 
 FLAGS = flags.FLAGS
-flags.DEFINE_spaceseplist("tasks", None, "One or more tasks to be used for pretraining")
+flags.DEFINE_spaceseplist("training_tasks", None, "One or more tasks to be used for pretraining")
+flags.DEFINE_spaceseplist("validation_tasks", None, "One or more tasks to be used for validation during pretraining")
+flags.DEFINE_spaceseplist("testing_tasks", None, "One or more tasks to be used for evaluating pretrained models")
 
 flags.DEFINE_integer('num_epochs', 3, 'Number of epochs to train')
 flags.DEFINE_integer('warmup_epochs', 3, 'Number of warmup epochs before normal training')
@@ -26,6 +28,8 @@ flags.DEFINE_integer('eval_batch_size', 128, 'Batch size to use when evaluating 
 flags.DEFINE_integer('eval_batches', 100, 'Number of batches to evaluate when testing')
 flags.DEFINE_boolean('use_xla', False, 'Enable XLA optimization')
 flags.DEFINE_boolean('use_amp', False, 'Enable AMP optimization')
+flags.DEFINE_boolean('do_train', False, 'Train and validate the specified model')
+flags.DEFINE_boolean('do_test', False, 'Evaluate the performance of a pretrained model')
 flags.DEFINE_integer('max_seq_len', 128, 'Maximum sequence length')
 flags.DEFINE_string('model_name', 'bert-base-cased', 'Name of pretrained transformer model to load')
 flags.DEFINE_string('checkpoint_file', None, 'Path to save checkpoints')
@@ -65,39 +69,50 @@ def main(argv):
 
     # Load model
     model = experiment.load_model(model_name=FLAGS.model_name)
+   
+    if FLAGS.do_train:
+        # Parse dataset and split
+        training_tasks = [experiments.Task.parse(task) for task in FLAGS.training_tasks]
+        validation_tasks = [experiments.Task.parse(task) for task in FLAGS.validation_tasks]
 
-    # Train model
-    logging.info('Training %s with %s...', FLAGS.model_name, ' '.join(FLAGS.tasks))
-    experiment.train(model,
-                     tasks=FLAGS.tasks,
-                     num_epochs=FLAGS.num_epochs,
-                     steps_per_epoch=FLAGS.steps_per_epoch,
-                     prefetch_size=FLAGS.prefetch_size,
-                     batch_size=FLAGS.batch_size,
-                     eval_batch_size=FLAGS.eval_batch_size,
-                     eval_batches=FLAGS.eval_batches,
-                     checkpoint_file=FLAGS.checkpoint_file)
+        # Train model
+        logging.info('Training %s with %s...', FLAGS.model_name, ' '.join(FLAGS.training_tasks))
+        experiment.train(model,
+                         training_tasks=training_tasks,
+                         validation_tasks=training_tasks,
+                         num_epochs=FLAGS.num_epochs,
+                         steps_per_epoch=FLAGS.steps_per_epoch,
+                         prefetch_size=FLAGS.prefetch_size,
+                         batch_size=FLAGS.batch_size,
+                         eval_batch_size=FLAGS.eval_batch_size,
+                         eval_batches=FLAGS.eval_batches,
+                         checkpoint_file=FLAGS.checkpoint_file)
 
-    # Evaluate the model
-    logging.info('Evaluating %s with %s...', FLAGS.model_name, ' '.join(FLAGS.tasks))
-    predictions = experiment.predict(model,
-                                     tasks=FLAGS.tasks,
-                                     eval_batch_size=FLAGS.eval_batch_size,
-                                     eval_batches=FLAGS.eval_batches,
-                                     splits=[tfds.Split.TRAIN, tfds.Split.VALIDATION, tfds.Split.TEST])
+    if FLAGS.do_test:
+        # Evaluate the model
+        testing_tasks = [experiments.Task.parse(task) for task in FLAGS.testing_tasks]
+        logging.info('Evaluating %s with %s...', FLAGS.model_name, ' '.join(FLAGS.testing_tasks))
+        predictions = experiment.predict(model,
+                                         tasks=testing_tasks,
+                                         eval_batch_size=FLAGS.eval_batch_size,
+                                         eval_batches=FLAGS.eval_batches,
+                                         splits=[tfds.Split.VALIDATION, tfds.Split.TEST])
 
-    logging.info('Results:')
-    evaluator: evaluation.Evaluator
-    if FLAGS.evaluation == 'basic':
-        evaluator = evaluation.BasicEvaluator()
-    elif FLAGS.evaluation == 'nlg':
-        nlg_eval = importlib.import_module('nlgeval')
-        evaluator = evaluation.NlgEvaluator(nlg=nlg_eval.NLGEval())
-    else:
-        raise NotImplementedError('Unsupported evaluator \"' + FLAGS.evaluation + "\"")
+        logging.info('Results:')
+        evaluator: evaluation.Evaluator
+        if FLAGS.evaluation == 'basic':
+            evaluator = evaluation.BasicEvaluator()
+        elif FLAGS.evaluation == 'nlg':
+            nlg_eval = importlib.import_module('nlgeval')
+            evaluator = evaluation.NlgEvaluator(nlg=nlg_eval.NLGEval())
+        else:
+            raise NotImplementedError('Unsupported evaluator \"' + FLAGS.evaluation + "\"")
 
-    results = evaluator.evaluate(predictions)
-    print(results)
+        results = evaluator.evaluate(predictions)
+        print(results)
+
+    if not FLAGS.do_test and not FLAGS.do_train:
+       raise ValueError('Please specify training and/or testing mode.')
 
 
 if __name__ == '__main__':
