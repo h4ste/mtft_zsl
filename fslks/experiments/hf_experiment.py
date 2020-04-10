@@ -52,7 +52,17 @@ class Task(object):
         :param string: task and split string,
         :return: a new Task object
         """
-        raise NotImplementedError('Max should implement me!')
+        task = string.split("::")
+        if len(task) == 1:
+            dataset = task[0]
+            split = None
+        elif len(task) == 2:
+            dataset = task[0]
+            split = task[1]
+        else:
+            raise ValueError("Recieved unexpected task specification.")
+        
+        return Task(dataset, split)
 
 
 
@@ -145,14 +155,14 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         )
 
     def load_train_data(self,
-                        tasks: typing.Sequence[str],
+                        tasks: typing.Sequence[Task],
                         batch_size: int,
                         prefetch_size: int) -> tf.data.Dataset:
         logging.debug('Loading training data...')
         training_data = []
         for task in tasks:
-            if self.split_in_dataset(tfds.Split.TRAIN, task):
-                dataset = self.load_task_data(task, tfds.Split.TRAIN, decode=True) \
+            if self.split_in_dataset(tfds.Split.TRAIN, task.dataset):
+                dataset = self.load_task_data(task.dataset, tfds.Split.TRAIN, decode=True) \
                     .cache() \
                     .shuffle(128) \
                     .batch(batch_size, drop_remainder=True) \
@@ -167,15 +177,15 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         return training_data.prefetch(prefetch_size)
 
     def load_valid_data(self,
-                        tasks: typing.Iterable[str],
+                        tasks: typing.Iterable[Task],
                         batch_size: int,
                         prefetch_size: int,
                         num_batches: typing.Optional[int] = None) -> tf.data.Dataset:
         logging.debug('Loading validation data...')
         validation_data = []
         for task in tasks:
-            if self.split_in_dataset(tfds.Split.VALIDATION, task):
-                task_data = self.load_task_data(task, tfds.Split.VALIDATION).batch(batch_size, drop_remainder=True)
+            if self.split_in_dataset(tfds.Split.VALIDATION, task.dataset):
+                task_data = self.load_task_data(task.dataset, tfds.Split.VALIDATION).batch(batch_size, drop_remainder=True)
                 if num_batches:
                     task_data = task_data.take(num_batches)
                 validation_data.append(task_data)
@@ -204,7 +214,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
 
     def predict(self,
                 model: Model,
-                tasks: typing.List[str],
+                tasks: typing.List[Task],
                 splits: typing.Iterable[tfds.Split],
                 eval_batch_size: int,
                 eval_batches: typing.Optional[int] = None) -> Predictions:
@@ -213,13 +223,12 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         predictions: Predictions = {}
 
         for task in tasks:
-            for split in splits:
-                if not self.split_in_dataset(split, task):
-                    logging.warning('Task %s has no %s split, so it will not be evaluated.',
-                                    task, split)
-                    continue
+            if not self.split_in_dataset(task.split, task.dataset):
+                logging.warning('Task %s has no %s split, so it will not be evaluated.',
+                                task.dataset, task.split)
+                continue
                 # try:
-                task_data = self.load_task_data(task, split=split).batch(eval_batch_size, drop_remainder=False)
+                task_data = self.load_task_data(task.dataset, split=task.split).batch(eval_batch_size, drop_remainder=False)
                 # except ValueError as e:
                 #     if str(e).startswith('Unknown split'):
                 #         # This is a ValueError indicating there is no validation split, so return nothing

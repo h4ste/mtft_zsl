@@ -11,7 +11,7 @@ import tqdm.auto as tqdm
 import transformers
 from absl import logging
 
-from fslks.experiments import Experiment
+from fslks.experiments import Experiment, Task
 
 INPUT_DTYPES = {
     'input_ids': torch.long,
@@ -108,7 +108,8 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
 
     def train(self,
               model: transformers.PreTrainedModel,
-              tasks: typing.List[str],
+              training_tasks: typing.List[Task],
+              validation_tasks: typing.List[Task],
               num_epochs: int,
               batch_size: int,
               steps_per_epoch: int,
@@ -116,15 +117,16 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
               eval_batch_size: typing.Optional[int] = None,
               eval_batches: typing.Optional[int] = None,
               checkpoint_file: typing.Optional[str] = None) -> None:
-        logging.info('Preparing kitchen sink with %d tasks: %s', len(tasks), tasks)
+        logging.info('Preparing kitchen sink with %d training tasks: %s', len(training_tasks), training_tasks)
 
         # Train the model & return its training history
         logging.info('Beginning training...')
-        training_data = self.load_train_data(tasks,
+        training_data = self.load_train_data(training_tasks,
                                              batch_size=batch_size,
                                              prefetch_size=prefetch_size).as_numpy_iterator()
 
-        validation_data = self.load_valid_data(tasks,
+        logging.info('Preparing kitchen sink with %d validation tasks: %s', len(validation_tasks), validation_tasks)
+        validation_data = self.load_valid_data(validation_tasks,
                                                batch_size=eval_batch_size or batch_size,
                                                prefetch_size=prefetch_size,
                                                num_batches=eval_batches)
