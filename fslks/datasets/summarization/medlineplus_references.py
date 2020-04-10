@@ -1,5 +1,5 @@
 """
-Module to create MedlinePlus PubMed review summarization tensorflow dataset. 
+Module to create MedlinePlus PubMed reference summarization tensorflow dataset. 
 """
 import os
 import json
@@ -7,8 +7,7 @@ import json
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
 
-_DESCRIPTION = """The MedlinePlus multi-document reference summarization dataset, built using articles at available in in the Start Here and Learn More sections in the xml at https://medlineplus.gov/xml.html. The urls for these articles
-obtained from the XML and the articles were then crawled from the web
+_DESCRIPTION = """The MedlinePlus multi-document reference summarization dataset, built using articles at available in in the Start Here and Learn More sections in the xml at https://medlineplus.gov/xml.html. The urls for these articles obtained from the XML and the articles were then crawled from the web
 """
 
 _CITATION = """This work is 100% plagiarized"""
@@ -55,7 +54,7 @@ class MedlineplusReferences(tfds.core.GeneratorBasedBuilder):
         ]
 
     def _generate_examples(self, path):
-        """Parse and yield medlineplus_reference_collection.json for multi-document summarization"""
+        """Parse and yield medlineplus references"""
         with tf.io.gfile.GFile(path) as f:
             data = json.load(f)
             for i, mp_url in enumerate(data):

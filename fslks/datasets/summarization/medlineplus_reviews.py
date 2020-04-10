@@ -52,7 +52,7 @@ class MedlineplusReviews(tfds.core.GeneratorBasedBuilder):
         ]
 
     def _generate_examples(self, path):
-        """Parse and yield medlineplus_review_collection.json for multi-document summarization"""
+        """Parse and yield medlineplus review collection"""
         with tf.io.gfile.GFile(path) as f:
             data = json.load(f)
             for i, url in enumerate(data):
