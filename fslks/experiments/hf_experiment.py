@@ -131,12 +131,13 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         logging.debug('Loading training data...')
         training_data = []
         for task in tasks:
-            dataset = self.load_task_data(task, tfds.Split.TRAIN, decode=True) \
-                .cache() \
-                .shuffle(128) \
-                .batch(batch_size, drop_remainder=True) \
-                .repeat()
-            training_data.append(dataset)
+            if self.split_in_dataset(tfds.Split.TRAIN, task):
+                dataset = self.load_task_data(task, tfds.Split.TRAIN, decode=True) \
+                    .cache() \
+                    .shuffle(128) \
+                    .batch(batch_size, drop_remainder=True) \
+                    .repeat()
+                training_data.append(dataset)
 
         # This an array specifying which task should be used for each training iteration for one Epoch
         # Because tasks are already batched, we determine the number of batches in an epoch,
