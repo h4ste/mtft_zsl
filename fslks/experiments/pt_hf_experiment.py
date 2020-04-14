@@ -155,8 +155,6 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         epoch_itr = tqdm.trange(0, num_epochs * steps_per_epoch, desc="Training", )
         for epoch in range(1, num_epochs + 1):
             running_loss = 0.
-            running_valid_loss = 0.
-
             training_itr = tqdm.tqdm(training_data, desc="Epoch %d" % epoch, initial=1, leave=True, unit=" steps")
             training_steps = 0
             for step, (inputs, labels, _) in enumerate(training_itr, 1):
@@ -187,6 +185,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                     break
 
             valid_steps = 0
+            running_valid_loss = 0.
             for step, (inputs, labels, _) in enumerate(validation_data.as_numpy_iterator(), 1):
                 model.eval()
                 with torch.no_grad():
@@ -207,6 +206,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             typing.Optional[np.ndarray]:
         try:
             outputs = []
+            model.to(self.device)
             for batch_inputs in inputs.as_numpy_iterator():
                 with torch.no_grad():
                     model.eval()

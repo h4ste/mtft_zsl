@@ -25,9 +25,10 @@ class BasicEvaluator(Evaluator):
         results = []
 
         for task, task_predictions in predictions.items():
-            for split, split_predictions in task_predictions.items():
-                targets = [*map(str.split, split_predictions['target_tokens'])]
-                predictions = [*map(str.split, split_predictions['pred_tokens'])]
+            for split, split_predictions_fn in task_predictions.items():
+                split_predictions = split_predictions_fn()
+                targets = [*map(str.split, split_predictions['targets'])]
+                predictions = [*map(str.split, split_predictions['predictions'])]
                 assert len(targets) == len(predictions), \
                     "%s[%s] only had %d predictions for %d targets!" % (task, split, len(targets), len(predictions))
                 for idx, (target_, prediction_) in enumerate(zip(targets, predictions)):
@@ -61,9 +62,10 @@ class NlgEvaluator(Evaluator):
         results = []
 
         for task, task_predictions in predictions.items():
-            for split, split_predictions in task_predictions.items():
-                targets = split_predictions['target_tokens']
-                predictions = split_predictions['pred_tokens']
+            for split, split_predictions_fn in task_predictions.items():
+                split_predictions = split_predictions_fn()
+                targets = split_predictions['targets']
+                predictions = split_predictions['predictions']
 
                 logging.info('%s[%s]: Targets shape: %s; Targets[0]: %s',
                              task, split, np.asarray(targets).shape, targets[0])
