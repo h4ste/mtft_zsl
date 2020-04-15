@@ -144,7 +144,7 @@ def main(argv):
         logging.info('Training %s with %s...', FLAGS.init_checkpoint, ' '.join(FLAGS.training_tasks))
         experiment.train(model,
                          training_tasks=training_tasks,
-                         validation_tasks=training_tasks,
+                         validation_tasks=validation_tasks,
                          num_epochs=FLAGS.num_epochs,
                          steps_per_epoch=FLAGS.steps_per_epoch,
                          prefetch_size=FLAGS.prefetch_size,
