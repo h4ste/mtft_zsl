@@ -26,7 +26,7 @@ _MEDINFO_DOWNLOAD_INSTRUCTIONS = """Link to medinfo and provide processing scrip
 class Medinfo(tfds.core.GeneratorBasedBuilder):
     """MedInfo summarization dataset builder"""
 
-    VERSION = tfds.core.Version("2.1.0")
+    VERSION = tfds.core.Version("1.0.0")
     MANUAL_DOWNLOAD_INSTRUCTIONS = _MEDINFO_DOWNLOAD_INSTRUCTIONS
 
     def _info(self):

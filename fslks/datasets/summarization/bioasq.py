@@ -29,10 +29,10 @@ class BioasqConfig(tfds.core.BuilderConfig):
         """
         super(BioasqConfig, self).__init__(
             version=tfds.core.Version(
-                "2.1.0"),
+                "1.0.0"),
             supported_versions=[
                 tfds.core.Version(
-                    "2.1.0"),
+                    "1.0.0"),
             ],
             **kwargs)
         self.single_doc = single_doc

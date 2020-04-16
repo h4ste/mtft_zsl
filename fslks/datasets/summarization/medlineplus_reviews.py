@@ -25,7 +25,7 @@ class MedlineplusReviews(tfds.core.GeneratorBasedBuilder):
             description=_DESCRIPTION,
             features=tfds.features.FeaturesDict({
                 'summary': tfds.features.Text(),
-                'url': tfds.features.Text(),
+                'medlineplus_url': tfds.features.Text(),
                 'article': tfds.features.Sequence(tfds.features.Text()),
                 'pmids': tfds.features.Sequence(tfds.features.Text()),
             }),

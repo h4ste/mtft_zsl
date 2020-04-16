@@ -26,10 +26,10 @@ class EBMConfig(tfds.core.BuilderConfig):
         """
         super(EBMConfig, self).__init__(
             version=tfds.core.Version(
-                "2.1.0"),
+                "1.0.0"),
             supported_versions=[
                 tfds.core.Version(
-                    "2.1.0"),
+                    "1.0.0"),
             ],
             **kwargs)
 

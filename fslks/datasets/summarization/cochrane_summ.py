@@ -19,7 +19,7 @@ _COCHRANE_DOWNLOAD_INSTRUCTIONS = """Be very sneaky"""
 class CochraneSumm(tfds.core.GeneratorBasedBuilder):
     """Cochrane plain language summarization dataset builder"""
 
-    VERSION = tfds.core.Version("2.1.0")
+    VERSION = tfds.core.Version("1.0.0")
     MANUAL_DOWNLOAD_INSTRUCTIONS = _COCHRANE_DOWNLOAD_INSTRUCTIONS
 
     def _info(self):
