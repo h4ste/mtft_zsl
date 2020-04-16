@@ -5,11 +5,10 @@ import tensorflow.compat.v2 as tf
 import tensorflow.keras as keras
 import tensorflow_addons as tfa
 import tensorflow_datasets.public_api as tfds
-
-from fslks.experiments import Experiment
+import transformers
 from absl import logging
 
-import transformers
+from fslks.experiments import Experiment
 
 
 def configure_tf(use_xla: bool = False,
@@ -39,9 +38,9 @@ class TransformerOutputWrapper(keras.Model):
 
 class TFExperiment(Experiment[tf.keras.Model]):
 
-    def __init__(self, tokenizer_name: str, data_dir: str, max_seq_len: int,
+    def __init__(self, tokenizer_name: str, max_seq_len: int,
                  use_xla: bool = False, use_amp: bool = True):
-        super().__init__(tokenizer_name, data_dir, max_seq_len)
+        super().__init__(tokenizer_name, max_seq_len)
         configure_tf(use_xla=use_xla, use_amp=use_amp)
 
     def load_model(self, model_name: str) -> tf.keras.Model:
@@ -140,7 +139,7 @@ class TFExperiment(Experiment[tf.keras.Model]):
         except Exception as e:
             if isinstance(e, tf.errors.UnknownError):
                 # Unfortunately, we don't get a more helpful error type, but this usually means
-                # that the task has no labels for a given split (e.g., test evaluation occurs on a server)
+                # that the dataset has no labels for a given split (e.g., test evaluation occurs on a server)
                 return None
             else:
                 # We got a different exception type so let python freak out accordingly

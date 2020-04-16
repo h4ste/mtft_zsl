@@ -21,7 +21,7 @@ class Evaluator(abc.ABC):
 class BasicEvaluator(Evaluator):
 
     def evaluate(self, predictions: Predictions) -> str:
-        headers = ['Task', 'Split', 'W. Acc.', 'BLEU', 'ROUGE-1', 'ROUGE-2', 'ROUGE-L']
+        headers = ['Task', 'Split', 'ROUGE-1', 'ROUGE-2', 'ROUGE-L', 'BLEU']
         results = []
 
         for task, task_predictions in predictions.items():
@@ -41,11 +41,11 @@ class BasicEvaluator(Evaluator):
                 bleus = eval.bleu(target_corpus=targets, predicted_corpus=predictions)
                 rouges = eval.rouge(references=targets, hypotheses=predictions)
                 results.append([task, split,
-                                w_acc,
-                                bleus[0] * 100.,
                                 rouges['rouge_1/r_score'] * 100.,
                                 rouges['rouge_2/r_score'] * 100.,
-                                rouges['rouge_l/r_score'] * 100.])
+                                rouges['rouge_l/r_score'] * 100.,
+                                bleus[0] * 100.,
+                                ])
 
         return tabulate(results, headers=headers)
 
@@ -102,3 +102,14 @@ def auto_evaluate(predictions: Predictions) -> str:
         evaluator = BasicEvaluator()
 
     return evaluator.evaluate(predictions)
+
+
+def get_evaluator(evaluator: str) -> Evaluator:
+    if evaluator == 'basic':
+        evaluator = BasicEvaluator()
+    elif evaluator == 'nlg':
+        nlg_eval = importlib.import_module('nlgeval')
+        evaluator = NlgEvaluator(nlg=nlg_eval.NLGEval())
+    else:
+        raise NotImplementedError('Unsupported evaluator \"' + evaluator + "\"")
+    return evaluator

@@ -4,7 +4,7 @@ import os
 
 import numpy as np
 
-from fslks.experiments import Predictions
+from fslks.experiments import Predictions, Task
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
@@ -30,7 +30,7 @@ flags.DEFINE_integer('warmup_epochs', 3, 'Number of warmup epochs before normal 
 flags.DEFINE_integer('batch_size', 128, 'Batch size to use for training')
 flags.DEFINE_integer('prefetch_size', 10, 'Number of batches to prefetch')
 flags.DEFINE_integer('eval_batch_size', 128, 'Batch size to use when evaluating validation/test sets')
-flags.DEFINE_integer('eval_batches', 100, 'Number of batches to evaluate when testing')
+flags.DEFINE_integer('eval_batches', None, 'Number of batches to evaluate when testing')
 flags.DEFINE_boolean('use_xla', False, 'Enable XLA optimization')
 flags.DEFINE_boolean('use_amp', False, 'Enable AMP optimization')
 flags.DEFINE_boolean('do_train', False, 'Train and validate the specified model')
@@ -74,12 +74,14 @@ def save_predictions(predictions: Predictions, output_dir: str):
 
 def load_predictions(output_dir: str, testing_tasks) -> Predictions:
     predictions: Predictions = {}
-    for task, split in testing_tasks:
-        if split is None:
-            split = "test"
-        predictions_file = os.path.join(output_dir, task, split, 'predictions.csv')
+    for task in testing_tasks:
+        split = task.split_or_test()
+        if not split:
+            continue
+
+        predictions_file = os.path.join(output_dir, task.dataset, str(split), 'predictions.csv')
         if not os.path.exists(predictions_file):
-            logging.warning('Unable to load predictions for %s[%s]: %s not found', task, split, predictions_file)
+            logging.warning('Unable to load predictions for %s: %s not found', task, predictions_file)
             continue
 
         split_predictions = []
@@ -93,7 +95,7 @@ def load_predictions(output_dir: str, testing_tasks) -> Predictions:
                 prompts.append(row['prompt'])
 
         if task not in predictions:
-            predictions[task] = {}
+            predictions[task.dataset] = {}
 
         # Python does lazy binding so we need to store the results in an immutable variable, and then
         # use the variable as the default argument to the lambda since the default argument is actually
@@ -103,7 +105,8 @@ def load_predictions(output_dir: str, testing_tasks) -> Predictions:
             'predictions': np.asarray(split_predictions),
             'targets': np.asarray(targets)
         }
-        predictions[task][split] = lambda t=results: t
+        # noinspection PyDefaultArgument
+        predictions[task.dataset][split] = lambda t=results: t
 
         logging.info('Loaded %d predictions for %s[%s]', len(prompts), task, split)
     return predictions
@@ -114,18 +117,17 @@ def main(argv):
     del argv  # Unused.
 
     logging.set_verbosity(logging.DEBUG)
+    Task.data_dir = FLAGS.data_dir
 
     experiment: experiments.Experiment
     if FLAGS.implementation == 'tensorflow':
         # configure_tf(FLAGS.use_xla, FLAGS.use_amp)
         experiment = experiments.TFExperiment(tokenizer_name=FLAGS.init_checkpoint,
-                                              data_dir=FLAGS.data_dir,
                                               max_seq_len=FLAGS.max_seq_len,
                                               use_xla=FLAGS.use_xla,
                                               use_amp=FLAGS.use_amp)
     elif FLAGS.implementation == 'pytorch':
         experiment = experiments.PTExperiment(tokenizer_name=FLAGS.init_checkpoint,
-                                              data_dir=FLAGS.data_dir,
                                               max_seq_len=FLAGS.max_seq_len,
                                               use_amp=FLAGS.use_amp,
                                               warmup_epochs=FLAGS.warmup_epochs)
@@ -154,16 +156,13 @@ def main(argv):
                          checkpoint_file=FLAGS.checkpoint_dir)
 
         if FLAGS.checkpoint_dir:
-            try:
-                os.mkdir(FLAGS.checkpoint_dir)
-            except FileExistsError:
-                pass
+            os.makedirs(FLAGS.checkpoint_dir, exist_ok=True)
             experiment.save_model(model, FLAGS.checkpoint_dir)
 
     if FLAGS.do_predict:
         # Evaluate the model
         testing_tasks = [experiments.Task.parse(task) for task in FLAGS.testing_tasks]
-        logging.info('Evaluating %s with %s...', FLAGS.init_checkpoint, ' '.join(FLAGS.testing_tasks))
+        logging.info('Predicting %s with %s...', ' '.join(FLAGS.testing_tasks), FLAGS.init_checkpoint)
         predictions = experiment.predict(model,
                                          tasks=testing_tasks,
                                          eval_batch_size=FLAGS.eval_batch_size,
@@ -173,16 +172,9 @@ def main(argv):
     if FLAGS.do_test:
         testing_tasks = [experiments.Task.parse(task) for task in FLAGS.testing_tasks]
         predictions = load_predictions(FLAGS.prediction_dir, testing_tasks)
-        logging.info('Results:')
-        evaluator: evaluation.Evaluator
-        if FLAGS.evaluation == 'basic':
-            evaluator = evaluation.BasicEvaluator()
-        elif FLAGS.evaluation == 'nlg':
-            nlg_eval = importlib.import_module('nlgeval')
-            evaluator = evaluation.NlgEvaluator(nlg=nlg_eval.NLGEval())
-        else:
-            raise NotImplementedError('Unsupported evaluator \"' + FLAGS.evaluation + "\"")
 
+        logging.info('Results:')
+        evaluator = evaluation.get_evaluator(FLAGS.evaluation)
         results = evaluator.evaluate(predictions)
         print(results)
 

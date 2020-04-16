@@ -10,6 +10,8 @@ from absl import logging
 
 from fslks import sink
 
+import tqdm.auto as tqdm
+
 # Type variable for Experiments
 Model = typing.TypeVar('Model')
 
@@ -38,16 +40,18 @@ class Task(object):
     dataset: str
     split: typing.Union[str, tfds.Split, None]
 
+    data_dir: str = None
+
     def __init__(self, dataset: str, split: typing.Union[str, tfds.Split, None]):
         self.dataset = dataset
         self.split = split
 
     @classmethod
     def parse(cls, string: str):
-        """Parses a command-line specified task and split string to determine the dataset and optionally the split
+        """Parses a command-line specified dataset and split string to determine the dataset and optionally the split
         e.g., "super_glue/copa" -> Task(dataset="super_glue/copa", split=None)
               "super_glue/copa::train" -> Task(dataset="super_glue/copa", split="train")
-        :param string: task and split string,
+        :param string: dataset and split string,
         :return: a new Task object
         """
         task = string.split("::")
@@ -58,16 +62,45 @@ class Task(object):
             dataset = task[0]
             split = task[1]
         else:
-            raise ValueError("Received unexpected task specification.")
+            raise ValueError("Received unexpected dataset specification.")
 
         return Task(dataset, split)
 
-    def __iter__(self):
-        yield self.dataset
-        yield self.split
+    def _get_split_or_else(self, alternative: tfds.Split):
+        if self.split is not None:
+            return self.split
+        elif Task.split_in_dataset(alternative, self.dataset):
+            return alternative
+        else:
+            logging.warning('%s: dataset %s has no %s split and no alternative split was specified.',
+                            self, self.dataset, alternative)
+            return None
+
+    def split_or_train(self):
+        return self._get_split_or_else(tfds.Split.TRAIN)
+
+    def split_or_validation(self):
+        return self._get_split_or_else(tfds.Split.VALIDATION)
+
+    def split_or_test(self):
+        return self._get_split_or_else(tfds.Split.TEST)
 
     def __str__(self):
         return '%s[%s]' % (self.dataset, self.split)
+
+    @staticmethod
+    @functools.lru_cache(maxsize=None)
+    def get_or_load_dataset(name: str) -> (tfds.core.DatasetBuilder, tfds.core.DatasetInfo):
+        builder: tfds.core.DatasetBuilder = tfds.builder(name, data_dir=Task.data_dir)
+        builder.download_and_prepare()
+        info: tfds.core.DatasetInfo = builder.info
+        return builder, info
+
+    @staticmethod
+    def split_in_dataset(split: tfds.Split, dataset: str):
+        _, info = Task.get_or_load_dataset(dataset)
+        logging.debug('Looking for %s in %s of %s', split, info.splits, dataset)
+        return split in info.splits
 
 
 def concatenate(datasets: typing.Iterable[tf.data.Dataset]):
@@ -86,24 +119,12 @@ def concatenate(datasets: typing.Iterable[tf.data.Dataset]):
 class Experiment(abc.ABC, typing.Generic[Model]):
     def __init__(self,
                  tokenizer_name: str,
-                 data_dir: str,
                  # checksum_dir: str,
                  max_seq_len: int):
-        self.data_dir = data_dir
         # self.checksum_dir = checksum_dir
         self.max_seq_len = max_seq_len
         # self.prefetch_size = prefetch_size
         self.tokenizer, self.encoder_fn, self.decoder_fn = self.load_tokenizer(tokenizer_name)
-
-    @functools.lru_cache(maxsize=None)
-    def get_or_load_dataset(self, name: str) -> (tfds.core.DatasetBuilder, tfds.core.DatasetInfo):
-        builder: tfds.core.DatasetBuilder = tfds.builder(name, data_dir=self.data_dir)
-        info: tfds.core.DatasetInfo = builder.info
-        return builder, info
-
-    def split_in_dataset(self, split: tfds.Split, dataset: str):
-        _, info = self.get_or_load_dataset(dataset)
-        return split in info.splits
 
     def load_tokenizer(self, tokenizer_name: str):
         logging.debug('Loading tokenizer from %s...', tokenizer_name)
@@ -131,27 +152,26 @@ class Experiment(abc.ABC, typing.Generic[Model]):
     def load_model(self, model_name: str) -> Model:
         pass
 
-    def load_task_data(self, task: str, split: tfds.Split, decode=False) -> typing.Optional[tf.data.Dataset]:
-        """ Loads the data for a given task
+    def load_task_data(self, dataset: str, split: tfds.Split, decode=False) -> typing.Optional[tf.data.Dataset]:
+        """ Loads the data for a given dataset
 
-        :param task: Name of task to load
+        :param dataset: Name of dataset to load
         :param split: Name of split to load
         :param decode: Whether to log & decode examples
         :return: a tf.data.Datasets
         """
         assert self.encoder_fn is not None
         assert self.decoder_fn is not None
-        logging.debug('Loading %s data for task %s', split, task)
-        builder, info = self.get_or_load_dataset(task)
-        builder.download_and_prepare()
+        logging.debug('Loading %s data for dataset %s', split, dataset)
+        builder, info = Task.get_or_load_dataset(dataset)
         data = builder.as_dataset(split=split)
 
-        # Load the converter for this task registered to the kitchen sink
-        task_converter = sink.get_converter(task)(self.encoder_fn, self.decoder_fn if decode else None)
+        # Load the converter for this dataset registered to the kitchen sink
+        task_converter = sink.get_converter(dataset)(self.encoder_fn, self.decoder_fn if decode else None)
 
-        logging.debug('Encoding %s[%s] to format required by Transformer...', task, split)
+        logging.debug('Encoding %s[%s] to format required by Transformer...', dataset, split)
         return tf.data.Dataset.from_generator(
-            lambda: map(task_converter, enumerate(data)),
+            lambda: map(task_converter, tqdm.tqdm(enumerate(data), desc='Tokenizing %s' % dataset)),
             output_types=(INPUT_TYPES, OUTPUT_TYPE, SAMPLE_WEIGHT_TYPE),
             output_shapes=({
                                "input_ids": tf.TensorShape([None]),
@@ -168,26 +188,21 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                         prefetch_size: int) -> tf.data.Dataset:
         logging.debug('Loading training data...')
         training_data = []
-        for task, split in tasks:
+        for task in tasks:
+            split = task.split_or_train()
             if not split:
-                if not self.split_in_dataset(tfds.Split.TRAIN, task):
-                    logging.warning(
-                        'Task %s has no %s split and no alternative split was given, so it will not be used for training.',
-                        task, tfds.Split.TRAIN)
-                    continue
-                else:
-                    split = tfds.Split.TRAIN
+                continue
 
-            dataset = self.load_task_data(task, split, decode=True) \
+            dataset = self.load_task_data(task.dataset, split, decode=True) \
                 .cache() \
                 .shuffle(128) \
                 .batch(batch_size, drop_remainder=True) \
                 .repeat()
             training_data.append(dataset)
 
-        # This an array specifying which task should be used for each training iteration for one Epoch
+        # This an array specifying which dataset should be used for each training iteration for one Epoch
         # Because tasks are already batched, we determine the number of batches in an epoch,
-        # and sample a task for each batch.
+        # and sample a dataset for each batch.
         choices = tf.data.Dataset.range(len(tasks)).repeat().shuffle(128)
         training_data = tf.data.experimental.choose_from_datasets(training_data, choices)
         return training_data.prefetch(prefetch_size)
@@ -199,17 +214,12 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                         num_batches: typing.Optional[int] = None) -> tf.data.Dataset:
         logging.debug('Loading validation data...')
         validation_data = []
-        for task, split in tasks:
+        for task in tasks:
+            split = task.split_or_validation()
             if not split:
-                if not self.split_in_dataset(tfds.Split.VALIDATION, task):
-                    logging.warning(
-                        'Task %s has no %s split and no alternative split was given, so it will not be used for training.',
-                        task, tfds.Split.VALIDATION)
-                    continue
-                else:
-                    split = tfds.Split.VALIDATION
+                continue
 
-            task_data = self.load_task_data(task, split).batch(batch_size, drop_remainder=True)
+            task_data = self.load_task_data(task.dataset, split).batch(batch_size, drop_remainder=True)
             if num_batches:
                 task_data = task_data.take(num_batches)
             validation_data.append(task_data)
@@ -234,33 +244,26 @@ class Experiment(abc.ABC, typing.Generic[Model]):
     def predict_task_split(self, model, data: tf.data.Dataset) -> np.ndarray:
         pass
 
-    def _get_prediction_outputs(self, model, task, split,
+    def _get_prediction_outputs(self,
+                                model,
+                                dataset,
+                                split,
                                 eval_batch_size: int,
                                 eval_batches: typing.Optional[int] = None, ):
         decoder_fn = functools.partial(self.decoder_fn, clean_up_tokenization_spaces=True)
 
-        # try:
-        task_data = self.load_task_data(task, split=split).batch(eval_batch_size, drop_remainder=False)
-        # except ValueError as e:
-        #     if str(e).startswith('Unknown split'):
-        #         # This is a ValueError indicating there is no validation split, so return nothing
-        #         logging.warning('Task %s has no %s split, so it will not be evaluated.',
-        #                         task, split)
-        #         continue
-        #     else:
-        #         # This is some other ValueError so we should probably crash
-        #         raise e
+        task_data = self.load_task_data(dataset, split=split).batch(eval_batch_size, drop_remainder=False)
 
         if eval_batches:
             task_data = task_data.take(eval_batches)
 
-        logging.info('Evaluating %s on %s', task, split)
+        logging.info('Evaluating %s on %s', dataset, split)
         inputs = task_data.map(lambda inputs_, targets_, sample_weights: inputs_)
 
         outputs = self.predict_task_split(model, inputs)
         if outputs is None:
             logging.warning('Task %s has no labels for split %s, so it will not be evaluated.',
-                            task, split)
+                            dataset, split)
             return None
 
         targets = task_data.map(lambda inputs_, targets_, sample_weights: targets_).as_numpy_iterator()
@@ -271,9 +274,9 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         for i, (inputs_, outputs_, targets_) in enumerate(zip(input_ids, outputs, targets), start=1):
             if i > LOG_EXAMPLES:
                 break
-            logging.info("Task %s[%s] Example %d Prompt: %s", task, split, i, decoder_fn(inputs_))
-            logging.info("Task %s[%s] Example %d Outputs: %s", task, split, i, decoder_fn(outputs_))
-            logging.info("Task %s[%s] Example %d Targets: %s", task, split, i, decoder_fn(targets_))
+            logging.info("Task %s[%s] Example %d Prompt: %s", dataset, split, i, decoder_fn(inputs_))
+            logging.info("Task %s[%s] Example %d Outputs: %s", dataset, split, i, decoder_fn(outputs_))
+            logging.info("Task %s[%s] Example %d Targets: %s", dataset, split, i, decoder_fn(targets_))
 
         return {
             'prompt': [decoder_fn(inputs_) for inputs_ in input_ids],
@@ -288,23 +291,18 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                 eval_batches: typing.Optional[int] = None, ) -> Predictions:
         predictions: Predictions = {}
 
-        for task, split in tasks:
+        for task in tasks:
+            split = task.split_or_test()
             if not split:
-                if not self.split_in_dataset(tfds.Split.TEST, task):
-                    logging.warning(
-                        'Task %s has no %s split and no alternative split was specified, so it will not be predicted.',
-                        task, tfds.Split.TEST)
-                    continue
-                else:
-                    split = tfds.Split.TEST
+                continue
 
             if task not in predictions:
-                predictions[task]: TaskPredictions = {}
+                predictions[task.dataset]: TaskPredictions = {}
 
-            predictions[task][split] = functools.partial(self._get_prediction_outputs,
-                                                         model=model,
-                                                         task=task,
-                                                         split=split,
-                                                         eval_batch_size=eval_batch_size,
-                                                         eval_batches=eval_batches)
+            predictions[task.dataset][split] = functools.partial(self._get_prediction_outputs,
+                                                                 model=model,
+                                                                 dataset=task.dataset,
+                                                                 split=split,
+                                                                 eval_batch_size=eval_batch_size,
+                                                                 eval_batches=eval_batches)
         return predictions

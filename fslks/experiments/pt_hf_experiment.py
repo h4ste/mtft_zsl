@@ -44,14 +44,13 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
 
     def __init__(self,
                  tokenizer_name: str,
-                 data_dir: str,
                  # checksum_dir: str,
                  max_seq_len: int,
                  warmup_epochs: int = 3,
                  max_grad_norm: int = 1,
                  gradient_accumulation_steps: int = 1,
                  use_amp: bool = True):
-        super().__init__(tokenizer_name=tokenizer_name, data_dir=data_dir, max_seq_len=max_seq_len)
+        super().__init__(tokenizer_name=tokenizer_name, max_seq_len=max_seq_len)
         self.warmup_epochs = warmup_epochs
         self.max_grad_norm = max_grad_norm
         self.gradient_accumulation_steps = gradient_accumulation_steps
@@ -207,12 +206,10 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         try:
             outputs = []
             model.to(self.device)
-            for batch_inputs in inputs.as_numpy_iterator():
+            for batch_inputs in tqdm.tqdm(inputs.as_numpy_iterator(), desc="Predicting"):
                 with torch.no_grad():
                     model.eval()
-                    # logging.debug('Batch inputs: %s', batch_inputs)
                     forward_params = self.get_forward_params(model, batch_inputs)
-                    # logging.debug('Forward params: %s', forward_params)
                     batch_logits = model(**forward_params)[0]
                     # Pull the logits out of torch's graph
                     batch_logits = batch_logits.detach().cpu().numpy()
@@ -223,7 +220,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         except Exception as e:
             if isinstance(e, tf.errors.UnknownError):
                 # Unfortunately, we don't get a more helpful error type, but this usually means
-                # that the task has no labels for a given split (e.g., test evaluation occurs on a server)
+                # that the dataset has no labels for a given split (e.g., test evaluation occurs on a server)
                 return None
             else:
                 # We got a different exception type so let python freak out accordingly
