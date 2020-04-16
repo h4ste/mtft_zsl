@@ -27,18 +27,19 @@ tasks = [
     "chiqa/single-ext-s2a", 
     "chiqa/single-ext-p2a", 
 ]
-tasks = ["cochrane_summ"]
-tasks = ["medinfo"]
-tasks = ["pubmed_summ"]
-tasks = ["ebm/answer", "ebm/justify"]
-data_dir = "/data/LHC_kitchensink/tensorflow_datasets/"
+tasks = ['chiqa/section2answer_multi_abstractive', 'chiqa/page2answer_multi_abstractive', 'chiqa/section2answer_multi_extractive', 'chiqa/page2answer_multi_extractive', 'chiqa/section2answer_single_abstractive', 'chiqa/page2answer_single_abstractive', 'chiqa/section2answer_single_extractive', 'chiqa/page2answer_single_extractive']
+#tasks = ["cochrane_summ"]
+#tasks = ["medinfo"]
+#tasks = ["pubmed_summ"]
+#tasks = ["ebm/answer", "ebm/justify"]
+data_dir = "/data/LHC_kitchensink/tensorflow_datasets_max"
 for task in tasks:
     print(task)
     if "chiqa" not in task:
         data, info = tfds.load(task, with_info=True, split=tfds.Split.TRAIN, data_dir=data_dir)
     if "medinfo" in task or "ebm" in task or "medlineplus" in task or "cochrane" in task:
         data, info = tfds.load(task, with_info=True, split=tfds.Split.VALIDATION, data_dir=data_dir)
-    if task == "bioasq/multi-doc" not in task:
+    if "bioasq/multi-doc" not in task:
         data, info = tfds.load(task, with_info=True, split=tfds.Split.TEST, data_dir=data_dir)
     
     print(info)

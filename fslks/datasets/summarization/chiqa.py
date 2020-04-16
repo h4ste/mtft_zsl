@@ -32,10 +32,10 @@ class ChiqaConfig(tfds.core.BuilderConfig):
         """
         super(ChiqaConfig, self).__init__(
             version=tfds.core.Version(
-                "2.1.0"),
+                "1.0.0"),
             supported_versions=[
                 tfds.core.Version(
-                    "2.1.0"),
+                    "1.0.0"),
             ],
             **kwargs)
 
@@ -118,13 +118,12 @@ class Chiqa(tfds.core.GeneratorBasedBuilder):
             for example in data:
                 question = data[example]['question']
                 if self.builder_config.single_doc:
-                    for answer_id in data:
-                        example_cnt += 1
-                        yield example_cnt, {
-                            'article': data[answer_id]['articles'],
-                            'summary': data[answer_id]['summary'],
-                            'question': question,
-                        }
+                    example_cnt += 1
+                    yield example_cnt, {
+                        'article': data[example]['articles'],
+                        'summary': data[example]['summary'],
+                        'question': question,
+                    }
                 else:
                     articles = []
                     example_cnt += 1
