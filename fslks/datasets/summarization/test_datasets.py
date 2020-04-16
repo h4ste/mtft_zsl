@@ -17,17 +17,7 @@ from cochrane_summ import CochraneSumm
 
 tasks = ["cochrane_summ", "medlineplus_references", "medlineplus_reviews", "bioasq/single-doc", "bioasq/multi-doc", "ebm", "medinfo", "pubmed_summ"]
 #tasks = ["medline_plus_references", "medline_plus_reviews"]
-tasks = [                
-    "chiqa/multi-abs-s2a", 
-    "chiqa/multi-abs-p2a", 
-    "chiqa/multi-ext-s2a", 
-    "chiqa/multi-ext-p2a", 
-    "chiqa/single-abs-s2a", 
-    "chiqa/single-abs-p2a", 
-    "chiqa/single-ext-s2a", 
-    "chiqa/single-ext-p2a", 
-]
-tasks = ['chiqa/section2answer_multi_abstractive', 'chiqa/page2answer_multi_abstractive', 'chiqa/section2answer_multi_extractive', 'chiqa/page2answer_multi_extractive', 'chiqa/section2answer_single_abstractive', 'chiqa/page2answer_single_abstractive', 'chiqa/section2answer_single_extractive', 'chiqa/page2answer_single_extractive']
+#tasks = ['chiqa/section2answer_multi_abstractive', 'chiqa/page2answer_multi_abstractive', 'chiqa/section2answer_multi_extractive', 'chiqa/page2answer_multi_extractive', 'chiqa/section2answer_single_abstractive', 'chiqa/page2answer_single_abstractive', 'chiqa/section2answer_single_extractive', 'chiqa/page2answer_single_extractive']
 #tasks = ["cochrane_summ"]
 #tasks = ["medinfo"]
 #tasks = ["pubmed_summ"]
