@@ -18,7 +18,7 @@ _PUBMED_DOWNLOAD_INSTRUCTIONS = """This data set can be created using e-utils an
 class PubmedSumm(tfds.core.GeneratorBasedBuilder):
     """PubMed Publisher-Summary dataset builder"""
 
-    VERSION = tfds.core.Version("2.1.0")
+    VERSION = tfds.core.Version("1.0.0")
     MANUAL_DOWNLOAD_INSTRUCTIONS = _PUBMED_DOWNLOAD_INSTRUCTIONS
 
     def _info(self):
