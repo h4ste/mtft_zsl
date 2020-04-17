@@ -138,7 +138,9 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                                        add_space_before_punct_symbol=True,
                                        max_length=self.max_seq_len,
                                        pad_to_max_length=True,
-                                       truncation_strategy="only_first")
+                                       truncation_strategy="only_first",
+                                       return_token_type_ids=True,
+                                       return_attention_mask=True)
 
         decoder_fn = functools.partial(tokenizer.decode, skip_special_tokens=True)
 
