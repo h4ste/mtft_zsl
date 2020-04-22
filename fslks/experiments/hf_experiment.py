@@ -173,7 +173,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         assert self.decoder_fn is not None
         logging.debug('Loading %s data for dataset %s', split, dataset)
         builder, info = Task.get_or_load_dataset(dataset)
-        data = builder.as_dataset(split=split)
+        data = builder.as_dataset(split=split, shuffle_files=True)
 
         # Load the converter for this dataset registered to the kitchen sink
         task_converter = sink.get_converter(dataset)(self.encoder_fn, self.decoder_fn if decode else None)
