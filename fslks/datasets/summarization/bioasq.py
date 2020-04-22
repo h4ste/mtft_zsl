@@ -78,7 +78,7 @@ class Bioasq(tfds.core.GeneratorBasedBuilder):
 
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
-        path = dl_manager.manual_dir
+        path = os.path.join(dl_manager.manual_dir, self.name)
         # There is not a test set for multi-doc summarization, 
         # because ideal summaries are not provided by BioASQ 
         # in test data
