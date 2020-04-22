@@ -102,7 +102,7 @@ class Chiqa(tfds.core.GeneratorBasedBuilder):
 
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
-        path = dl_manager.manual_dir
+        path = os.path.join(dl_manager.manual_dir, self.name)
         return [
                 tfds.core.SplitGenerator(
                     name=tfds.Split.TEST,

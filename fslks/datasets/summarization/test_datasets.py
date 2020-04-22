@@ -15,9 +15,9 @@ from chiqa import Chiqa
 from cochrane_summ import CochraneSumm
 
 
-tasks = ["cochrane_summ", "medlineplus_references", "medlineplus_reviews", "bioasq/single-doc", "bioasq/multi-doc", "ebm", "medinfo", "pubmed_summ"]
+#tasks = ["cochrane_summ", "medlineplus_references", "medlineplus_reviews", "bioasq/single-doc", "bioasq/multi-doc", "medinfo", "pubmed_summ", "ebm/answer", "ebm/justify"]
 #tasks = ["medline_plus_references", "medline_plus_reviews"]
-#tasks = ['chiqa/section2answer_multi_abstractive', 'chiqa/page2answer_multi_abstractive', 'chiqa/section2answer_multi_extractive', 'chiqa/page2answer_multi_extractive', 'chiqa/section2answer_single_abstractive', 'chiqa/page2answer_single_abstractive', 'chiqa/section2answer_single_extractive', 'chiqa/page2answer_single_extractive']
+tasks = ['chiqa/section2answer_multi_abstractive', 'chiqa/page2answer_multi_abstractive', 'chiqa/section2answer_multi_extractive', 'chiqa/page2answer_multi_extractive', 'chiqa/section2answer_single_abstractive', 'chiqa/page2answer_single_abstractive', 'chiqa/section2answer_single_extractive', 'chiqa/page2answer_single_extractive']
 #tasks = ["cochrane_summ"]
 #tasks = ["medinfo"]
 #tasks = ["pubmed_summ"]
@@ -34,4 +34,4 @@ for task in tasks:
     
     print(info)
     print("Successfully loaded dataset: {}".format(task))
-    print(vars(data))
+    #print(vars(data))
