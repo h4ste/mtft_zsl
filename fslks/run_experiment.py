@@ -25,9 +25,9 @@ flags.DEFINE_spaceseplist("testing_tasks", None, "One or more tasks to be used f
 
 flags.DEFINE_integer('num_epochs', 3, 'Number of epochs to train')
 flags.DEFINE_integer('warmup_epochs', 3, 'Number of warmup epochs before normal training')
-flags.DEFINE_integer('batch_size', 128, 'Batch size to use for training')
+flags.DEFINE_integer('batch_size', 16, 'Batch size to use for training')
 flags.DEFINE_integer('prefetch_size', 10, 'Number of batches to prefetch')
-flags.DEFINE_integer('eval_batch_size', 128, 'Batch size to use when evaluating validation/test sets')
+flags.DEFINE_integer('eval_batch_size', 16, 'Batch size to use when evaluating validation/test sets')
 flags.DEFINE_integer('eval_batches', None, 'Number of batches to evaluate when testing')
 flags.DEFINE_boolean('use_xla', False, 'Enable XLA optimization')
 flags.DEFINE_boolean('use_amp', False, 'Enable AMP optimization')
@@ -35,10 +35,10 @@ flags.DEFINE_boolean('do_train', False, 'Train and validate the specified model'
 flags.DEFINE_boolean('do_predict', False, 'Save (trained) model predictions model')
 flags.DEFINE_boolean('do_test', False, 'Evaluate the performance of a (trained) model')
 flags.DEFINE_integer('max_seq_len', 128, 'Maximum sequence length')
-flags.DEFINE_string('init_checkpoint', 'bert-base-cased', 'Name of pretrained transformer model to load')
+flags.DEFINE_string('init_checkpoint', 't5-base', 'Name of pretrained transformer model to load')
 flags.DEFINE_string('checkpoint_dir', None, 'Path to save checkpoints')
 flags.DEFINE_string('prediction_dir', None, 'Path to save/load predictions')
-flags.DEFINE_string('data_dir', None, 'Path to TensorFlow DataSet home (e.g., ~/tensorflow_datasets)')
+flags.DEFINE_string('data_dir', None, 'Path to TensorFlow DataSets home (e.g., ~/tensorflow_datasets)')
 flags.DEFINE_string('cache_dir', None, 'Path to save TensorFlow DataSet cache files (e.g., /tmp)')
 flags.DEFINE_string('checksum_dir', '/data/LHC_kitchensink/tensorflow_datasets/url_checksums',
                     help='Path to checksum directory')
@@ -157,6 +157,7 @@ def main(argv):
         if FLAGS.checkpoint_dir:
             os.makedirs(FLAGS.checkpoint_dir, exist_ok=True)
             experiment.save_model(model, FLAGS.checkpoint_dir)
+            FLAGS.append_flags_into_file(os.path.join(FLAGS.checkpoint_dir, 'flags.cfg'))
 
     if FLAGS.do_predict:
         # Evaluate the model
