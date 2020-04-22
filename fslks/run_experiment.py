@@ -8,8 +8,6 @@ from fslks.experiments import Predictions, Task
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-import importlib
-
 from absl import flags
 from absl import app
 from absl import logging
@@ -118,6 +116,7 @@ def main(argv):
 
     logging.set_verbosity(logging.DEBUG)
     Task.data_dir = FLAGS.data_dir
+    Task.add_checksum_dir(FLAGS.checksum_dir)
 
     experiment: experiments.Experiment
     if FLAGS.implementation == 'tensorflow':

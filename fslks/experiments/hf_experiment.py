@@ -102,6 +102,13 @@ class Task(object):
         logging.debug('Looking for %s in %s of %s', split, info.splits, dataset)
         return split in info.splits
 
+    @classmethod
+    def add_checksum_dir(cls, checksum_dir: str):
+        if checksum_dir:
+            tfds.download.add_checksums_dir(
+                checksum_dir,
+            )
+
 
 def concatenate(datasets: typing.Iterable[tf.data.Dataset]):
     dataset_itr = iter(datasets)
