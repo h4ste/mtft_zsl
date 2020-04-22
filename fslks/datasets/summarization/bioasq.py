@@ -45,12 +45,12 @@ class Bioasq(tfds.core.GeneratorBasedBuilder):
 
     BUILDER_CONFIGS = [
             BioasqConfig(
-                name="multi-doc", 
+                name="multi_doc",
                 single_doc=False,
                 #data_dir="",
                 description="multi-document summarization"),
             BioasqConfig(
-                name="single-doc",
+                name="single_doc",
                 single_doc=True,
                 description="single document summarization"),
             ]

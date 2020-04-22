@@ -4,7 +4,7 @@ from fslks.datasets.argumentation import *
 # noinspection PyUnresolvedReferences
 from fslks.datasets.summarization import *
 
-sink.register('bioasq/single-doc',
+sink.register('bioasq/single_doc',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
@@ -12,7 +12,7 @@ sink.register('bioasq/single-doc',
               ]),
               target=sink.Feature('summary'))
 
-sink.register('bioasq/multi-doc',
+sink.register('bioasq/multi_doc',
               prompt=sink.Constant('summarize'),
               input=sink.Sequence([
                   sink.Feature('question'),
