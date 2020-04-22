@@ -26,7 +26,7 @@ flags.DEFINE_spaceseplist("testing_tasks", None, "One or more tasks to be used f
 flags.DEFINE_integer('num_epochs', 3, 'Number of epochs to train')
 flags.DEFINE_integer('warmup_epochs', 3, 'Number of warmup epochs before normal training')
 flags.DEFINE_integer('batch_size', 16, 'Batch size to use for training')
-flags.DEFINE_integer('prefetch_size', 10, 'Number of batches to prefetch')
+flags.DEFINE_integer('prefetch_size', -1, 'Number of batches to prefetch (default: AUTOTUNE)')
 flags.DEFINE_integer('eval_batch_size', 16, 'Batch size to use when evaluating validation/test sets')
 flags.DEFINE_integer('eval_batches', None, 'Number of batches to evaluate when testing')
 flags.DEFINE_boolean('use_xla', False, 'Enable XLA optimization')
