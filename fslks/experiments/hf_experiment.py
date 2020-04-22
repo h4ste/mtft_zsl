@@ -180,7 +180,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
 
         logging.debug('Encoding %s[%s] to format required by Transformer...', dataset, split)
         return tf.data.Dataset.from_generator(
-            lambda: map(task_converter, tqdm.tqdm(enumerate(data), desc='Tokenizing %s' % dataset)),
+            lambda: map(task_converter, tqdm.tqdm(enumerate(data), desc='Tokenizing %s' % dataset, smoothing=1.)),
             output_types=(INPUT_TYPES, OUTPUT_TYPE, SAMPLE_WEIGHT_TYPE),
             output_shapes=({
                                "input_ids": tf.TensorShape([None]),
