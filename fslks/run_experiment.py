@@ -47,6 +47,7 @@ flags.DEFINE_enum('implementation', default='tensorflow', enum_values=['tensorfl
                   help='implementation to use for huggingface models')
 flags.DEFINE_enum('evaluation', default='basic', enum_values=['basic', 'nlg'],
                   help='method to use for evaluating model performance')
+flags.DEFINE_integer('seed', default=1337, help='Random seed used for experiments')
 
 
 def save_predictions(predictions: Predictions, output_dir: str):
@@ -121,15 +122,19 @@ def main(argv):
     experiment: experiments.Experiment
     if FLAGS.implementation == 'tensorflow':
         # configure_tf(FLAGS.use_xla, FLAGS.use_amp)
-        experiment = experiments.TFExperiment(tokenizer_name=FLAGS.init_checkpoint,
+        experiment = experiments.TFExperiment(cache_dir=FLAGS.cache_dir,
+                                              tokenizer_name=FLAGS.init_checkpoint,
                                               max_seq_len=FLAGS.max_seq_len,
                                               use_xla=FLAGS.use_xla,
-                                              use_amp=FLAGS.use_amp)
+                                              use_amp=FLAGS.use_amp,
+                                              seed=FLAGS.seed)
     elif FLAGS.implementation == 'pytorch':
-        experiment = experiments.PTExperiment(tokenizer_name=FLAGS.init_checkpoint,
+        experiment = experiments.PTExperiment(cache_dir=FLAGS.cache_dir,
+                                              tokenizer_name=FLAGS.init_checkpoint,
                                               max_seq_len=FLAGS.max_seq_len,
                                               use_amp=FLAGS.use_amp,
-                                              warmup_epochs=FLAGS.warmup_epochs)
+                                              warmup_epochs=FLAGS.warmup_epochs,
+                                              seed=FLAGS.seed)
     else:
         raise NotImplementedError('Unsupported implementation \"%s\"' % FLAGS.implementation)
 

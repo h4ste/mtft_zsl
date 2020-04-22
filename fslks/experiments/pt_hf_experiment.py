@@ -44,18 +44,21 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
 
     def __init__(self,
                  tokenizer_name: str,
-                 # checksum_dir: str,
                  max_seq_len: int,
+                 cache_dir: typing.Optional[str] = None,
                  warmup_epochs: int = 3,
                  max_grad_norm: int = 1,
                  gradient_accumulation_steps: int = 1,
-                 use_amp: bool = True):
-        super().__init__(tokenizer_name=tokenizer_name, max_seq_len=max_seq_len)
+                 use_amp: bool = True,
+                 seed: typing.Optional[int] = None):
+        super().__init__(tokenizer_name=tokenizer_name, max_seq_len=max_seq_len, cache_dir=cache_dir, seed=seed)
         self.warmup_epochs = warmup_epochs
         self.max_grad_norm = max_grad_norm
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.use_amp = use_amp
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if seed:
+            torch.manual_seed(seed)
 
     def load_model(self, model_name: str) -> transformers.PreTrainedModel:
         model_name = model_name

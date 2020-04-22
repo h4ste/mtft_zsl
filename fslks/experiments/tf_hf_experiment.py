@@ -4,7 +4,6 @@ import numpy as np
 import tensorflow.compat.v2 as tf
 import tensorflow.keras as keras
 import tensorflow_addons as tfa
-import tensorflow_datasets.public_api as tfds
 import transformers
 from absl import logging
 
@@ -39,9 +38,14 @@ class TransformerOutputWrapper(keras.Model):
 
 class TFExperiment(Experiment[tf.keras.Model]):
 
-    def __init__(self, tokenizer_name: str, max_seq_len: int,
-                 use_xla: bool = False, use_amp: bool = True):
-        super().__init__(tokenizer_name, max_seq_len)
+    def __init__(self,
+                 tokenizer_name: str,
+                 max_seq_len: int,
+                 cache_dir: typing.Optional[str] = None,
+                 use_xla: bool = False,
+                 use_amp: bool = True,
+                 seed: typing.Optional[int] = None):
+        super().__init__(tokenizer_name=tokenizer_name, max_seq_len=max_seq_len, cache_dir=cache_dir, seed=seed)
         configure_tf(use_xla=use_xla, use_amp=use_amp)
 
     def load_model(self, model_name: str) -> tf.keras.Model:

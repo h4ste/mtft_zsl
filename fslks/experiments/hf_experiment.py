@@ -1,16 +1,16 @@
 import abc
 import functools
+import os
 import typing
 
 import numpy as np
 import tensorflow.compat.v2 as tf
 import tensorflow_datasets.public_api as tfds
+import tqdm.auto as tqdm
 import transformers
 from absl import logging
 
 from fslks import sink
-
-import tqdm.auto as tqdm
 
 # Type variable for Experiments
 Model = typing.TypeVar('Model')
@@ -126,11 +126,15 @@ def concatenate(datasets: typing.Iterable[tf.data.Dataset]):
 class Experiment(abc.ABC, typing.Generic[Model]):
     def __init__(self,
                  tokenizer_name: str,
-                 # checksum_dir: str,
-                 max_seq_len: int):
-        # self.checksum_dir = checksum_dir
+                 max_seq_len: int,
+                 cache_dir: typing.Optional[str] = None,
+                 seed: typing.Optional[int] = None):
         self.max_seq_len = max_seq_len
-        # self.prefetch_size = prefetch_size
+        self.cache_dir = cache_dir
+
+        if seed:
+            np.random.seed(seed)
+            tf.random.set_seed(seed)
         self.tokenizer, self.encoder_fn, self.decoder_fn = self.load_tokenizer(tokenizer_name)
 
     def load_tokenizer(self, tokenizer_name: str):
@@ -179,7 +183,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         task_converter = sink.get_converter(dataset)(self.encoder_fn, self.decoder_fn if decode else None)
 
         logging.debug('Encoding %s[%s] to format required by Transformer...', dataset, split)
-        return tf.data.Dataset.from_generator(
+        dataset = tf.data.Dataset.from_generator(
             lambda: map(task_converter, tqdm.tqdm(enumerate(data), desc='Tokenizing %s' % dataset, smoothing=1.)),
             output_types=(INPUT_TYPES, OUTPUT_TYPE, SAMPLE_WEIGHT_TYPE),
             output_shapes=({
@@ -190,6 +194,12 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                            tf.TensorShape([None, 1]),
                            tf.TensorShape([None]))
         )
+        if self.cache_dir:
+            cache_file = os.path.join(self.cache_dir, '%s.%s.cache' % (dataset, split))
+            logging.debug('Caching tokenized data for %s[%s] to %s', dataset, split, cache_file)
+            return dataset.cache(cache_file)
+        else:
+            return dataset
 
     def load_train_data(self,
                         tasks: typing.Sequence[Task],
@@ -203,7 +213,6 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                 continue
 
             dataset = self.load_task_data(task.dataset, split, decode=True) \
-                .cache() \
                 .shuffle(128) \
                 .batch(batch_size, drop_remainder=True) \
                 .repeat()
