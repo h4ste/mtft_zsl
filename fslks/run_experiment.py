@@ -19,9 +19,9 @@ from fslks import experiments
 from fslks import evaluation
 
 FLAGS = flags.FLAGS
-flags.DEFINE_spaceseplist("training_tasks", None, "One or more tasks to be used for pretraining")
-flags.DEFINE_spaceseplist("validation_tasks", None, "One or more tasks to be used for validation during pretraining")
-flags.DEFINE_spaceseplist("testing_tasks", None, "One or more tasks to be used for evaluating pretrained models")
+flags.DEFINE_spaceseplist("training_tasks", [], "One or more tasks to be used for pretraining")
+flags.DEFINE_spaceseplist("validation_tasks", [], "One or more tasks to be used for validation during pretraining")
+flags.DEFINE_spaceseplist("testing_tasks", [], "One or more tasks to be used for evaluating pretrained models")
 
 flags.DEFINE_integer('num_epochs', 3, 'Number of epochs to train')
 flags.DEFINE_integer('warmup_epochs', 3, 'Number of warmup epochs before normal training')
@@ -47,7 +47,7 @@ flags.DEFINE_enum('implementation', default='tensorflow', enum_values=['tensorfl
                   help='implementation to use for huggingface models')
 flags.DEFINE_enum('evaluation', default='basic', enum_values=['basic', 'nlg'],
                   help='method to use for evaluating model performance')
-flags.DEFINE_integer('seed', default=1337, help='Random seed used for experiments')
+flags.DEFINE_integer('seed', default=None, help='Random seed used for experiments')
 
 
 def save_predictions(predictions: Predictions, output_dir: str):
@@ -74,11 +74,7 @@ def save_predictions(predictions: Predictions, output_dir: str):
 def load_predictions(output_dir: str, testing_tasks) -> Predictions:
     predictions: Predictions = {}
     for task in testing_tasks:
-        split = task.split_or_test()
-        if not split:
-            continue
-
-        predictions_file = os.path.join(output_dir, task.dataset, str(split), 'predictions.csv')
+        predictions_file = os.path.join(output_dir, task.dataset, str(task.split), 'predictions.csv')
         if not os.path.exists(predictions_file):
             logging.warning('Unable to load predictions for %s: %s not found', task, predictions_file)
             continue
@@ -143,8 +139,8 @@ def main(argv):
 
     if FLAGS.do_train:
         # Parse dataset and split
-        training_tasks = [experiments.Task.parse(task) for task in FLAGS.training_tasks]
-        validation_tasks = [experiments.Task.parse(task) for task in (FLAGS.validation_tasks or FLAGS.training_tasks)]
+        training_tasks = Task.parse_train_tasks(FLAGS.training_tasks)
+        validation_tasks = Task.parse_validation_tasks(FLAGS.validation_tasks)
 
         # Train model
         logging.info('Training %s with %s...', FLAGS.init_checkpoint, ' '.join(FLAGS.training_tasks))
@@ -166,7 +162,7 @@ def main(argv):
 
     if FLAGS.do_predict:
         # Evaluate the model
-        testing_tasks = [experiments.Task.parse(task) for task in FLAGS.testing_tasks]
+        testing_tasks = Task.parse_test_tasks(FLAGS.testing_tasks)
         logging.info('Predicting %s with %s...', ' '.join(FLAGS.testing_tasks), FLAGS.init_checkpoint)
         predictions = experiment.predict(model,
                                          tasks=testing_tasks,
@@ -175,7 +171,7 @@ def main(argv):
         save_predictions(predictions, FLAGS.prediction_dir)
 
     if FLAGS.do_test:
-        testing_tasks = [experiments.Task.parse(task) for task in FLAGS.testing_tasks]
+        testing_tasks = Task.parse_test_tasks(FLAGS.testing_tasks)
         predictions = load_predictions(FLAGS.prediction_dir, testing_tasks)
 
         logging.info('Results:')

@@ -4,7 +4,7 @@ import typing
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
-from absl import logging
+import logging
 # noinspection PyProtectedMember
 from tensorflow_datasets.core.registered import DatasetNotFoundError
 

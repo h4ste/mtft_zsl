@@ -1,5 +1,6 @@
 import abc
 import functools
+import logging
 import os
 import typing
 
@@ -8,7 +9,6 @@ import tensorflow.compat.v2 as tf
 import tensorflow_datasets.public_api as tfds
 import tqdm.auto as tqdm
 import transformers
-from absl import logging
 
 from fslks import sink
 
@@ -76,14 +76,33 @@ class Task(object):
                             self, self.dataset, alternative)
             return None
 
-    def split_or_train(self):
-        return self._get_split_or_else(tfds.Split.TRAIN)
+    @staticmethod
+    def _parse_tasks(task_strs: typing.Iterable[str], fallback_split: typing.Optional[tfds.Split] = None):
+        tasks = []
+        for task_str in task_strs:
+            task = Task.parse(task_str)
 
-    def split_or_validation(self):
-        return self._get_split_or_else(tfds.Split.VALIDATION)
+            if fallback_split:
+                split = task._get_split_or_else(fallback_split)
+                task = Task(dataset=task.dataset, split=split)
 
-    def split_or_test(self):
-        return self._get_split_or_else(tfds.Split.TEST)
+            if task.split is None:
+                continue
+
+            tasks.append(task)
+        return tasks
+
+    @staticmethod
+    def parse_train_tasks(task_strs: typing.Iterable[str]):
+        return Task._parse_tasks(task_strs, fallback_split=tfds.Split.TRAIN)
+
+    @staticmethod
+    def parse_validation_tasks(task_strs: typing.Iterable[str]):
+        return Task._parse_tasks(task_strs, fallback_split=tfds.Split.VALIDATION)
+
+    @staticmethod
+    def parse_test_tasks(task_strs: typing.Iterable[str]):
+        return Task._parse_tasks(task_strs, fallback_split=tfds.Split.TEST)
 
     def __str__(self):
         return '%s[%s]' % (self.dataset, self.split)
@@ -99,7 +118,7 @@ class Task(object):
     @staticmethod
     def split_in_dataset(split: tfds.Split, dataset: str):
         _, info = Task.get_or_load_dataset(dataset)
-        logging.debug('Looking for %s in %s of %s', split, info.splits, dataset)
+        # logging.debug('Looking for %s in %s of %s', split, info.splits, dataset)
         return split in info.splits
 
     @classmethod
@@ -134,7 +153,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
 
         if seed:
             np.random.seed(seed)
-            tf.random.set_seed(seed)
+            # tf.random.set_seed(seed)
         self.tokenizer, self.encoder_fn, self.decoder_fn = self.load_tokenizer(tokenizer_name)
 
     def load_tokenizer(self, tokenizer_name: str):
@@ -183,7 +202,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         task_converter = sink.get_converter(dataset)(self.encoder_fn, self.decoder_fn if decode else None)
 
         logging.debug('Encoding %s[%s] to format required by Transformer...', dataset, split)
-        dataset = tf.data.Dataset.from_generator(
+        tf_dataset = tf.data.Dataset.from_generator(
             lambda: map(task_converter, tqdm.tqdm(enumerate(data), desc='Tokenizing %s' % dataset, smoothing=1.)),
             output_types=(INPUT_TYPES, OUTPUT_TYPE, SAMPLE_WEIGHT_TYPE),
             output_shapes=({
@@ -194,12 +213,16 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                            tf.TensorShape([None, 1]),
                            tf.TensorShape([None]))
         )
-        if self.cache_dir:
+        if self.cache_dir == 'MEMORY':
+            return tf_dataset.cache()
+        elif self.cache_dir:
             cache_file = os.path.join(self.cache_dir, '%s.%s.cache' % (dataset, split))
+            # If we have configuration details, they create intermediate directories that need to be created
+            os.makedirs(os.path.join(cache_file, os.pardir), exist_ok=True)
             logging.debug('Caching tokenized data for %s[%s] to %s', dataset, split, cache_file)
-            return dataset.cache(cache_file)
+            return tf_dataset.cache(cache_file)
         else:
-            return dataset
+            return tf_dataset
 
     def load_train_data(self,
                         tasks: typing.Sequence[Task],
@@ -208,11 +231,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         logging.debug('Loading training data...')
         training_data = []
         for task in tasks:
-            split = task.split_or_train()
-            if not split:
-                continue
-
-            dataset = self.load_task_data(task.dataset, split, decode=True) \
+            dataset = self.load_task_data(task.dataset, task.split, decode=True) \
                 .shuffle(128) \
                 .batch(batch_size, drop_remainder=True) \
                 .repeat()
@@ -233,11 +252,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         logging.debug('Loading validation data...')
         validation_data = []
         for task in tasks:
-            split = task.split_or_validation()
-            if not split:
-                continue
-
-            task_data = self.load_task_data(task.dataset, split).batch(batch_size, drop_remainder=True)
+            task_data = self.load_task_data(task.dataset, task.split).batch(batch_size, drop_remainder=True)
             if num_batches:
                 task_data = task_data.take(num_batches)
             validation_data.append(task_data)
@@ -310,17 +325,14 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         predictions: Predictions = {}
 
         for task in tasks:
-            split = task.split_or_test()
-            if not split:
-                continue
 
-            if task not in predictions:
+            if task.dataset not in predictions:
                 predictions[task.dataset]: TaskPredictions = {}
 
-            predictions[task.dataset][split] = functools.partial(self._get_prediction_outputs,
-                                                                 model=model,
-                                                                 dataset=task.dataset,
-                                                                 split=split,
-                                                                 eval_batch_size=eval_batch_size,
-                                                                 eval_batches=eval_batches)
+            predictions[task.dataset][task.split] = functools.partial(self._get_prediction_outputs,
+                                                                      model=model,
+                                                                      dataset=task.dataset,
+                                                                      split=task.split,
+                                                                      eval_batch_size=eval_batch_size,
+                                                                      eval_batches=eval_batches)
         return predictions

@@ -121,7 +121,7 @@ class TFExperiment(Experiment[tf.keras.Model]):
         validation_data = self.load_valid_data(validation_tasks,
                                                batch_size=eval_batch_size or batch_size,
                                                prefetch_size=prefetch_size,
-                                               num_batches=eval_batches)
+                                               num_batches=eval_batches) if validation_tasks else None
 
         history = model.fit(x=training_data,
                             validation_data=validation_data,

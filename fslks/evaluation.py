@@ -8,7 +8,7 @@ import importlib
 
 from tabulate import tabulate
 
-from absl import logging
+import logging
 
 
 class Evaluator(abc.ABC):

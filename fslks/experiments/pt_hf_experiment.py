@@ -9,7 +9,7 @@ from torch.optim.optimizer import Optimizer
 import tqdm.auto as tqdm
 
 import transformers
-from absl import logging
+import logging
 
 from fslks.experiments import Experiment, Task
 
@@ -127,11 +127,15 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                                              batch_size=batch_size,
                                              prefetch_size=prefetch_size).as_numpy_iterator()
 
-        logging.info('Preparing kitchen sink with %d validation tasks: %s', len(validation_tasks), validation_tasks)
-        validation_data = self.load_valid_data(validation_tasks,
-                                               batch_size=eval_batch_size or batch_size,
-                                               prefetch_size=prefetch_size,
-                                               num_batches=eval_batches)
+        if validation_tasks:
+            logging.info('Preparing kitchen sink with %d validation tasks: %s', len(validation_tasks), validation_tasks)
+            validation_data = self.load_valid_data(validation_tasks,
+                                                   batch_size=eval_batch_size or batch_size,
+                                                   prefetch_size=prefetch_size,
+                                                   num_batches=eval_batches)
+        else:
+            validation_data = None
+            logging.info('Preparing kitchen sink without validation')
 
         opt: Optimizer = get_optimizer(model)
 
@@ -188,18 +192,19 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
 
             valid_steps = 0
             running_valid_loss = 0.
-            for step, (inputs, labels, _) in enumerate(validation_data.as_numpy_iterator(), 1):
-                model.eval()
+            if validation_data:
                 with torch.no_grad():
-                    # Run the forward pass
-                    loss = model(**self.get_forward_params(model, inputs, labels))[0]
-                    running_valid_loss += loss.item()
-                valid_steps += 1
+                    for step, (inputs, labels, _) in enumerate(validation_data.as_numpy_iterator(), 1):
+                        model.eval()
+                        # Run the forward pass
+                        loss = model(**self.get_forward_params(model, inputs, labels))[0]
+                        running_valid_loss += loss.item()
+                    valid_steps += 1
 
             training_itr.set_postfix_str('Global step: %d, tr_loss: %f, val_loss: %f' % (
                 global_step,
                 running_loss / training_steps,
-                running_valid_loss / valid_steps if valid_steps > 0 else 'NaN'))
+                running_valid_loss / valid_steps if valid_steps > 0 else np.NaN))
 
             training_itr.close()
         epoch_itr.close()
