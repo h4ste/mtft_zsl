@@ -2,13 +2,15 @@ import abc
 import functools
 import logging
 import os
+import sys
 import typing
 
 import numpy as np
 import tensorflow.compat.v2 as tf
 import tensorflow_datasets.public_api as tfds
-import tqdm.auto as tqdm
 import transformers
+
+from tqdm import auto as tqdm
 
 from fslks import sink
 
@@ -106,6 +108,9 @@ class Task(object):
 
     def __str__(self):
         return '%s[%s]' % (self.dataset, self.split)
+
+    def __repr__(self):
+        return self.__str__()
 
     @staticmethod
     @functools.lru_cache(maxsize=None)
@@ -213,6 +218,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                            tf.TensorShape([None, 1]),
                            tf.TensorShape([None]))
         )
+
         if self.cache_dir == 'MEMORY':
             return tf_dataset.cache()
         elif self.cache_dir:

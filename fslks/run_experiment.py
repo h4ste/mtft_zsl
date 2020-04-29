@@ -1,6 +1,12 @@
 # We need to set this variable to shut-up TensorFlow's C++ logging messages
 import csv
 import os
+import faulthandler
+import signal
+import sys
+
+faulthandler.enable()
+faulthandler.register(signal.SIGUSR1)
 
 import numpy as np
 
@@ -12,8 +18,6 @@ from absl import flags
 from absl import app
 from absl import logging
 
-# We need to import our custom TensorFlow DataSet Builders
-# noinspection PyUnresolvedReferences
 from fslks import tasks
 from fslks import experiments
 from fslks import evaluation
@@ -101,7 +105,7 @@ def load_predictions(output_dir: str, testing_tasks) -> Predictions:
             'targets': np.asarray(targets)
         }
         # noinspection PyDefaultArgument
-        predictions[task.dataset][split] = lambda t=results: t
+        predictions[task.dataset][task.split] = lambda t=results: t
 
         logging.info('Loaded %d predictions for %s[%s]', len(prompts), task, split)
     return predictions
@@ -114,6 +118,8 @@ def main(argv):
     logging.set_verbosity(logging.DEBUG)
     Task.data_dir = FLAGS.data_dir
     Task.add_checksum_dir(FLAGS.checksum_dir)
+
+    tasks.register_tasks()
 
     experiment: experiments.Experiment
     if FLAGS.implementation == 'tensorflow':

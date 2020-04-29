@@ -48,6 +48,9 @@ class Constant(Input):
     def to_str(self, elem: tfds.features.FeaturesDict) -> str:
         return str(self._value)
 
+    def __str__(self):
+        return self._value
+
 
 class Feature(Input):
     def __init__(self, key: str):
@@ -61,6 +64,9 @@ class Feature(Input):
 
     def to_str(self, elem: tfds.features.FeaturesDict) -> str:
         return elem[self._key].numpy().decode('utf8')
+
+    def __str__(self):
+        return '[' + self._key + ']'
 
 
 class DictEntry(Input):
@@ -79,6 +85,9 @@ class DictEntry(Input):
     def to_str(self, elem: tfds.features.FeaturesDict) -> str:
         return self.entry_mapper.to_str(elem[self.dict_feature])
 
+    def __str__(self):
+        return '[' + self.dict_feature + '].' + str(self.entry_mapper)
+
 
 class LabelMapping(Input):
     def __init__(self, label_feature: str, mapping: typing.Mapping[int, Input]):
@@ -94,6 +103,9 @@ class LabelMapping(Input):
 
     def to_str(self, elem: tfds.features.FeaturesDict) -> str:
         return self.mapping[int(elem[self.label].numpy())].to_str(elem)
+
+    def __str__(self):
+        return 'Mapping[%s]' % self.label
 
 
 class Sequence(Input):
@@ -131,8 +143,17 @@ class Sequence(Input):
             # This shouldn't happen if Python is correctly type checking!
             raise ValueError
 
+    def __str__(self):
+        if isinstance(self._inputs, str):
+            return '*[%s]' % self._inputs
+        elif isinstance(self._inputs, typing.Iterable):
+            return ' '.join(str(input_) for input_ in self._inputs)
+        else:
+            # This shouldn't happen if Python is correctly type checking!
+            raise ValueError
 
-def register(dataset_name: str, prompt: Input, input: Input, target: Input):
+
+def register(dataset_name: str, input: Input, target: Input, indicator: typing.Optional[Input] = None):
     try:
         builder = tfds.builder(dataset_name)
     except DatasetNotFoundError:
@@ -141,19 +162,25 @@ def register(dataset_name: str, prompt: Input, input: Input, target: Input):
 
     info = builder.info
 
-    for text in [prompt, input, target]:
-        text.validate(info)
+    if indicator is not None:
+        indicator.validate(info)
+    input.validate(info)
+    target.validate(info)
+    logging.info('Registered %s with specification input:"<%s>" & targets: "<%s>"', dataset_name, input, target)
 
     def make_conversion_fn(encoder_fn, decoder_fn=None):
 
         def conversion_fn(idx_elem: (int, tfds.features.FeaturesDict)):
             idx, elem = idx_elem
             try:
-                ex = encoder_fn(prompt.to_str(elem) + PROMPT_END + ' ' + input.to_str(elem))
+                segments = [indicator.to_str(elem)] if indicator else []
+                segments.append(input.to_str(elem))
+                input_ = SEP.join(segments)
+                ex = encoder_fn(input_)
             except TypeError as e:
-                prompt_str = prompt.to_str(elem)
+                prompt_str = indicator.to_str(elem)
                 input_str = input.to_str(elem)
-                raise ValueError('In dataset %s:\nPrompt returned %s: %s\nInput returned %s: %s\n%s' % (
+                raise TypeError('In dataset %s:\nPrompt returned %s: %s\nInput returned %s: %s\n%s' % (
                     dataset_name,
                     type(prompt_str), prompt_str,
                     type(input_str), input_str,
