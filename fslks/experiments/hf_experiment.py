@@ -2,15 +2,12 @@ import abc
 import functools
 import logging
 import os
-import sys
 import typing
 
 import numpy as np
 import tensorflow.compat.v2 as tf
 import tensorflow_datasets.public_api as tfds
 import transformers
-
-from tqdm import auto as tqdm
 
 from fslks import sink
 
@@ -149,7 +146,7 @@ def concatenate(datasets: typing.Iterable[tf.data.Dataset]):
 
 class Experiment(abc.ABC, typing.Generic[Model]):
     def __init__(self,
-                 tokenizer_name: str,
+                 configuration_name: str,
                  max_seq_len: int,
                  cache_dir: typing.Optional[str] = None,
                  seed: typing.Optional[int] = None):
@@ -159,27 +156,27 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         if seed:
             np.random.seed(seed)
             # tf.random.set_seed(seed)
-        self.tokenizer, self.encoder_fn, self.decoder_fn = self.load_tokenizer(tokenizer_name)
 
-    def load_tokenizer(self, tokenizer_name: str):
-        logging.debug('Loading tokenizer from %s...', tokenizer_name)
-        tokenizer: transformers.PreTrainedTokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name)
+        logging.debug('Loading configuration from %s...')
+        self.config: transformers.PretrainedConfig = transformers.AutoConfig.from_pretrained(configuration_name)
 
-        if not tokenizer.pad_token:
-            tokenizer.pad_token = '[PAD]'
+        logging.debug('Loading tokenizer from %s...', configuration_name)
+        self.tokenizer: transformers.PreTrainedTokenizer = \
+            transformers.AutoTokenizer.from_pretrained(configuration_name, config=self.config)
 
-        encoder_fn = functools.partial(tokenizer.encode_plus,
-                                       add_special_tokens=False,
-                                       add_space_before_punct_symbol=True,
-                                       max_length=self.max_seq_len,
-                                       pad_to_max_length=True,
-                                       truncation_strategy="only_first",
-                                       return_token_type_ids=True,
-                                       return_attention_mask=True)
+        if not self.tokenizer.pad_token:
+            self.tokenizer.pad_token = '[PAD]'
 
-        decoder_fn = functools.partial(tokenizer.decode, skip_special_tokens=True)
+        self.encoder_fn = functools.partial(self.tokenizer.encode_plus,
+                                            add_special_tokens=False,
+                                            add_space_before_punct_symbol=True,
+                                            max_length=self.max_seq_len,
+                                            pad_to_max_length=True,
+                                            truncation_strategy="only_first",
+                                            return_token_type_ids=True,
+                                            return_attention_mask=True)
 
-        return tokenizer, encoder_fn, decoder_fn
+        self.decoder_fn = functools.partial(self.tokenizer.decode, skip_special_tokens=True)
 
     def save_model(self, model: Model, path: str):
         model.save_pretrained(path)

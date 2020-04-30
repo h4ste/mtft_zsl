@@ -127,14 +127,14 @@ def main(argv):
     if FLAGS.implementation == 'tensorflow':
         # configure_tf(FLAGS.use_xla, FLAGS.use_amp)
         experiment = experiments.TFExperiment(cache_dir=FLAGS.cache_dir,
-                                              tokenizer_name=FLAGS.init_checkpoint,
+                                              configuration_name=FLAGS.init_checkpoint,
                                               max_seq_len=FLAGS.max_seq_len,
                                               use_xla=FLAGS.use_xla,
                                               use_amp=FLAGS.use_amp,
                                               seed=FLAGS.seed)
     elif FLAGS.implementation == 'pytorch':
         experiment = experiments.PTExperiment(cache_dir=FLAGS.cache_dir,
-                                              tokenizer_name=FLAGS.init_checkpoint,
+                                              configuration_name=FLAGS.init_checkpoint,
                                               max_seq_len=FLAGS.max_seq_len,
                                               use_amp=FLAGS.use_amp,
                                               warmup_epochs=FLAGS.warmup_epochs,

@@ -39,13 +39,13 @@ class TransformerOutputWrapper(keras.Model):
 class TFExperiment(Experiment[tf.keras.Model]):
 
     def __init__(self,
-                 tokenizer_name: str,
+                 configuration_name: str,
                  max_seq_len: int,
                  cache_dir: typing.Optional[str] = None,
                  use_xla: bool = False,
                  use_amp: bool = True,
                  seed: typing.Optional[int] = None):
-        super().__init__(tokenizer_name=tokenizer_name, max_seq_len=max_seq_len, cache_dir=cache_dir, seed=seed)
+        super().__init__(configuration_name=configuration_name, max_seq_len=max_seq_len, cache_dir=cache_dir, seed=seed)
         configure_tf(use_xla=use_xla, use_amp=use_amp)
 
     def load_model(self, model_name: str) -> tf.keras.Model:
@@ -56,9 +56,9 @@ class TFExperiment(Experiment[tf.keras.Model]):
         if model_name.startswith('t5'):
             # HuggingFace named T5's sequence generator "ConditionalGeneration" rather than "LanguageModeling"
             # like the others, so we need to load it separately.
-            model = transformers.TFT5ForConditionalGeneration.from_pretrained(model_name)
+            model = transformers.TFT5ForConditionalGeneration.from_pretrained(model_name, config=self.config)
         else:
-            model = transformers.TFAutoModelWithLMHead.from_pretrained(model_name)
+            model = transformers.TFAutoModelWithLMHead.from_pretrained(model_name, config=self.config)
 
         return TransformerOutputWrapper(model)
 

@@ -43,7 +43,7 @@ def get_optimizer(model: torch.nn.Module,
 class PTExperiment(Experiment[transformers.PreTrainedModel]):
 
     def __init__(self,
-                 tokenizer_name: str,
+                 configuration_name: str,
                  max_seq_len: int,
                  cache_dir: typing.Optional[str] = None,
                  warmup_epochs: int = 3,
@@ -51,7 +51,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                  gradient_accumulation_steps: int = 1,
                  use_amp: bool = True,
                  seed: typing.Optional[int] = None):
-        super().__init__(tokenizer_name=tokenizer_name, max_seq_len=max_seq_len, cache_dir=cache_dir, seed=seed)
+        super().__init__(configuration_name=configuration_name, max_seq_len=max_seq_len, cache_dir=cache_dir, seed=seed)
         self.warmup_epochs = warmup_epochs
         self.max_grad_norm = max_grad_norm
         self.gradient_accumulation_steps = gradient_accumulation_steps
@@ -68,9 +68,9 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         if model_name.startswith('t5'):
             # HuggingFace named T5's sequence generator "ConditionalGeneration" rather than "LanguageModeling"
             # like the others, so we need to load it separately.
-            model = transformers.T5ForConditionalGeneration.from_pretrained(model_name)
+            model = transformers.T5ForConditionalGeneration.from_pretrained(model_name, config=self.config)
         else:
-            model = transformers.AutoModelWithLMHead.from_pretrained(model_name)
+            model = transformers.AutoModelWithLMHead.from_pretrained(model_name, config=self.config)
 
         return model
 
