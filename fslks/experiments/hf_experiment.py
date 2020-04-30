@@ -203,9 +203,6 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         builder, info = Task.get_or_load_dataset(dataset)
         data: tf.data.Dataset = builder.as_dataset(split=split, shuffle_files=True)
 
-        # Load the converter for this dataset registered to the kitchen sink
-        task_converter = sink.get_converter(dataset)(self.encoder_fn, self.decoder_fn if decode else None)
-
         # tf.numpy_function can't handle dicts, so we need to flatten the output into a list
         def py_tokenize_example(string):
             string = string.decode('utf-8')
@@ -214,14 +211,16 @@ class Experiment(abc.ABC, typing.Generic[Model]):
 
         # decode and log a set of token_ids
         def py_decode_and_log(idx, name, token_ids):
-            if decode is not None:
-                tokens = self.decoder_fn(token_ids)
-                logging.info('Task %s[%s] Example %d %s: %s', dataset, split, idx + 1, name.decode('utf-8'), tokens)
+            tokens = self.decoder_fn(token_ids)
+            logging.info('Task %s[%s] Example %d %s: %s', dataset, split, idx + 1, name.decode('utf-8'), tokens)
+
+        # Load the converter for this dataset registered to the kitchen sink
+        task_converter = sink.get_converter(dataset)
 
         # convert tfds features into those required by transformers
         def convert(idx, ex):
             # Create input and target feature sequences
-            input_, target_ = task_converter(idx, ex)
+            input_, target_ = task_converter(ex)
 
             # Tokenize inputs & targets
             output_types = [tf.int64, tf.int64, tf.int64]
@@ -229,19 +228,21 @@ class Experiment(abc.ABC, typing.Generic[Model]):
             target_ids, _, _ = tf.numpy_function(py_tokenize_example, [target_], output_types)
 
             # Log first 5 inputs and targets for each dataset
-            if idx < 5:
+            if idx < 5 and decode:
                 tf.numpy_function(py_decode_and_log, [idx, 'Input', input_ids], [])
                 tf.numpy_function(py_decode_and_log, [idx, 'Target', target_ids], [])
 
-            ex = {
+            # Prepare input dictionary
+            input_dict = {
                 'input_ids': input_ids,
                 'attention_mask': attention_mask,
                 'token_type_ids': token_type_ids,
             }
 
+            # Add an extra dimension to targets to support temporal class weights in tf
             target_ids = tf.expand_dims(target_ids, axis=-1)
 
-            return ex, target_ids, attention_mask
+            return input_dict, target_ids, attention_mask
 
         logging.debug('Encoding %s[%s] to format required by Transformer...', dataset, split)
         return data.enumerate().map(convert)

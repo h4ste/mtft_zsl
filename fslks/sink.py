@@ -157,7 +157,7 @@ class Sequence(Input):
             raise ValueError
 
 
-def register(dataset_name: str, input: Input, target: Input, indicator: typing.Optional[Input] = None):
+def register(dataset_name: str, input: Input, target: Input):
     try:
         builder = tfds.builder(dataset_name)
     except DatasetNotFoundError:
@@ -166,53 +166,16 @@ def register(dataset_name: str, input: Input, target: Input, indicator: typing.O
 
     info = builder.info
 
-    if indicator is not None:
-        indicator.validate(info)
     input.validate(info)
     target.validate(info)
     logging.info('Registered %s with specification input:"<%s>" & targets: "<%s>"', dataset_name, input, target)
 
-    def make_conversion_fn(encoder_fn, decoder_fn=None):
+    def conversion_fn(elem: tfds.features.FeaturesDict):
+        input_ = input.to_tensor(elem)
+        target_ = target.to_tensor(elem)
+        return input_, target_
 
-        def conversion_fn(idx: int, elem: tfds.features.FeaturesDict):
-            segments = [indicator.to_tensor(elem)] if indicator else []
-            segments.append(input.to_tensor(elem))
-            input_ = tf.strings.join(segments, separator=' ')
-            target_ = target.to_tensor(elem)
-            return input_, target_
-
-            # # idx, elem = idx_elem
-            # try:
-            #     segments = [indicator.to_str(elem)] if indicator else []
-            #     segments.append(input.to_str(elem))
-            #     input_ = SEP.join(segments)
-            #     ex = encoder_fn(input_)
-            # except TypeError as e:
-            #     prompt_str = indicator.to_str(elem)
-            #     input_str = input.to_str(elem)
-            #     raise TypeError('In dataset %s:\nPrompt returned %s: %s\nInput returned %s: %s\n%s' % (
-            #         dataset_name,
-            #         type(prompt_str), prompt_str,
-            #         type(input_str), input_str,
-            #         e
-            #     ))
-            #
-            # try:
-            #     outputs = encoder_fn(target.to_str(elem))['input_ids']
-            #     outputs = np.expand_dims(outputs, -1)
-            # except tf.errors.UnknownError:
-            #     raise LabelError()
-            # if idx == 0 and decoder_fn is not None:
-            #     logging.info('Task %s Example %d Input: %s', dataset_name, idx + 1, decoder_fn(ex['input_ids']))
-            #     # logging.debug('Task %s Example %d Input Features: %s', dataset_name, idx + 1, ex)
-            #     logging.info('Task %s Example %d Target: %s', dataset_name, idx + 1, decoder_fn(outputs))
-            #
-            # sample_weight = ex['attention_mask']
-            # return ex, outputs, sample_weight
-
-        return conversion_fn
-
-    __SINK[dataset_name] = make_conversion_fn
+    __SINK[dataset_name] = conversion_fn
 
 
 def get_converter(dataset_name: str):
