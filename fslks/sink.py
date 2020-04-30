@@ -1,7 +1,6 @@
 import abc
 import typing
 
-import numpy as np
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
 import logging
@@ -63,7 +62,7 @@ class Feature(Input):
         return elem[self._key]
 
     def to_str(self, elem: tfds.features.FeaturesDict) -> str:
-        return elem[self._key].numpy().decode('utf8')
+        return elem[self._key].decode('utf8')
 
     def __str__(self):
         return '[' + self._key + ']'
@@ -99,10 +98,15 @@ class LabelMapping(Input):
         [input_.validate(info) for input_ in self.mapping.values()]
 
     def to_tensor(self, elem: tfds.features.FeaturesDict) -> tf.Tensor:
-        return self.mapping[int(elem[self.label].numpy())].to_tensor(elem)
+        index = tf.dtypes.cast(elem[self.label], tf.int32)
+        fns = {key: lambda input_=input_: input_.to_tensor(elem) for key, input_ in self.mapping.items()}
+        tensor = tf.switch_case(branch_index=index,
+                                branch_fns=fns,
+                                default=lambda: 'NONE')
+        return tensor
 
     def to_str(self, elem: tfds.features.FeaturesDict) -> str:
-        return self.mapping[int(elem[self.label].numpy())].to_str(elem)
+        return self.mapping[int(elem[self.label])].to_str(elem)
 
     def __str__(self):
         return 'Mapping[%s]' % self.label
@@ -170,35 +174,41 @@ def register(dataset_name: str, input: Input, target: Input, indicator: typing.O
 
     def make_conversion_fn(encoder_fn, decoder_fn=None):
 
-        def conversion_fn(idx_elem: (int, tfds.features.FeaturesDict)):
-            idx, elem = idx_elem
-            try:
-                segments = [indicator.to_str(elem)] if indicator else []
-                segments.append(input.to_str(elem))
-                input_ = SEP.join(segments)
-                ex = encoder_fn(input_)
-            except TypeError as e:
-                prompt_str = indicator.to_str(elem)
-                input_str = input.to_str(elem)
-                raise TypeError('In dataset %s:\nPrompt returned %s: %s\nInput returned %s: %s\n%s' % (
-                    dataset_name,
-                    type(prompt_str), prompt_str,
-                    type(input_str), input_str,
-                    e
-                ))
+        def conversion_fn(idx: int, elem: tfds.features.FeaturesDict):
+            segments = [indicator.to_tensor(elem)] if indicator else []
+            segments.append(input.to_tensor(elem))
+            input_ = tf.strings.join(segments, separator=' ')
+            target_ = target.to_tensor(elem)
+            return input_, target_
 
-            try:
-                outputs = encoder_fn(target.to_str(elem))['input_ids']
-                outputs = np.expand_dims(outputs, -1)
-            except tf.errors.UnknownError:
-                raise LabelError()
-            if idx == 0 and decoder_fn is not None:
-                logging.info('Task %s Example %d Input: %s', dataset_name, idx + 1, decoder_fn(ex['input_ids']))
-                # logging.debug('Task %s Example %d Input Features: %s', dataset_name, idx + 1, ex)
-                logging.info('Task %s Example %d Target: %s', dataset_name, idx + 1, decoder_fn(outputs))
-
-            sample_weight = ex['attention_mask']
-            return ex, outputs, sample_weight
+            # # idx, elem = idx_elem
+            # try:
+            #     segments = [indicator.to_str(elem)] if indicator else []
+            #     segments.append(input.to_str(elem))
+            #     input_ = SEP.join(segments)
+            #     ex = encoder_fn(input_)
+            # except TypeError as e:
+            #     prompt_str = indicator.to_str(elem)
+            #     input_str = input.to_str(elem)
+            #     raise TypeError('In dataset %s:\nPrompt returned %s: %s\nInput returned %s: %s\n%s' % (
+            #         dataset_name,
+            #         type(prompt_str), prompt_str,
+            #         type(input_str), input_str,
+            #         e
+            #     ))
+            #
+            # try:
+            #     outputs = encoder_fn(target.to_str(elem))['input_ids']
+            #     outputs = np.expand_dims(outputs, -1)
+            # except tf.errors.UnknownError:
+            #     raise LabelError()
+            # if idx == 0 and decoder_fn is not None:
+            #     logging.info('Task %s Example %d Input: %s', dataset_name, idx + 1, decoder_fn(ex['input_ids']))
+            #     # logging.debug('Task %s Example %d Input Features: %s', dataset_name, idx + 1, ex)
+            #     logging.info('Task %s Example %d Target: %s', dataset_name, idx + 1, decoder_fn(outputs))
+            #
+            # sample_weight = ex['attention_mask']
+            # return ex, outputs, sample_weight
 
         return conversion_fn
 

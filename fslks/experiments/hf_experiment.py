@@ -201,34 +201,62 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         assert self.decoder_fn is not None
         logging.debug('Loading %s data for dataset %s', split, dataset)
         builder, info = Task.get_or_load_dataset(dataset)
-        data = builder.as_dataset(split=split, shuffle_files=True)
+        data: tf.data.Dataset = builder.as_dataset(split=split, shuffle_files=True)
 
         # Load the converter for this dataset registered to the kitchen sink
         task_converter = sink.get_converter(dataset)(self.encoder_fn, self.decoder_fn if decode else None)
 
-        logging.debug('Encoding %s[%s] to format required by Transformer...', dataset, split)
-        tf_dataset = tf.data.Dataset.from_generator(
-            lambda: map(task_converter, tqdm.tqdm(enumerate(data), desc='Tokenizing %s' % dataset, smoothing=1.)),
-            output_types=(INPUT_TYPES, OUTPUT_TYPE, SAMPLE_WEIGHT_TYPE),
-            output_shapes=({
-                               "input_ids": tf.TensorShape([None]),
-                               "attention_mask": tf.TensorShape([None]),
-                               "token_type_ids": tf.TensorShape([None])
-                           },
-                           tf.TensorShape([None, 1]),
-                           tf.TensorShape([None]))
-        )
+        # tf.numpy_function can't handle dicts, so we need to flatten the output into a list
+        def py_tokenize_example(string):
+            string = string.decode('utf-8')
+            ex = self.encoder_fn(string)
+            return [ex['input_ids'], ex['attention_mask'], ex['token_type_ids']]
 
+        # decode and log a set of token_ids
+        def py_decode_and_log(idx, name, token_ids):
+            if decode is not None:
+                tokens = self.decoder_fn(token_ids)
+                logging.info('Task %s[%s] Example %d %s: %s', dataset, split, idx + 1, name.decode('utf-8'), tokens)
+
+        # convert tfds features into those required by transformers
+        def convert(idx, ex):
+            # Create input and target feature sequences
+            input_, target_ = task_converter(idx, ex)
+
+            # Tokenize inputs & targets
+            output_types = [tf.int64, tf.int64, tf.int64]
+            input_ids, attention_mask, token_type_ids = tf.numpy_function(py_tokenize_example, [input_], output_types)
+            target_ids, _, _ = tf.numpy_function(py_tokenize_example, [target_], output_types)
+
+            # Log first 5 inputs and targets for each dataset
+            if idx < 5:
+                tf.numpy_function(py_decode_and_log, [idx, 'Input', input_ids], [])
+                tf.numpy_function(py_decode_and_log, [idx, 'Target', target_ids], [])
+
+            ex = {
+                'input_ids': input_ids,
+                'attention_mask': attention_mask,
+                'token_type_ids': token_type_ids,
+            }
+
+            target_ids = tf.expand_dims(target_ids, axis=-1)
+
+            return ex, target_ids, attention_mask
+
+        logging.debug('Encoding %s[%s] to format required by Transformer...', dataset, split)
+        return data.enumerate().map(convert)
+
+    def maybe_cache(self, task: Task, data: tf.data.Dataset) -> tf.data.Dataset:
         if self.cache_dir == 'MEMORY':
-            return tf_dataset.cache()
+            return data.cache()
         elif self.cache_dir:
-            cache_file = os.path.join(self.cache_dir, '%s.%s.cache' % (dataset, split))
+            cache_file = os.path.join(self.cache_dir, '%s.%s.cache' % (task.dataset, task.split))
             # If we have configuration details, they create intermediate directories that need to be created
             os.makedirs(os.path.join(cache_file, os.pardir), exist_ok=True)
-            logging.debug('Caching tokenized data for %s[%s] to %s', dataset, split, cache_file)
-            return tf_dataset.cache(cache_file)
+            logging.debug('Caching tokenized data for %s to %s', task, cache_file)
+            return data.cache(cache_file)
         else:
-            return tf_dataset
+            return data
 
     def load_train_data(self,
                         tasks: typing.Sequence[Task],
@@ -237,7 +265,8 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         logging.debug('Loading training data...')
         training_data = []
         for task in tasks:
-            dataset = self.load_task_data(task.dataset, task.split, decode=True) \
+            dataset = self.load_task_data(task.dataset, task.split, decode=True)
+            dataset = self.maybe_cache(task, dataset) \
                 .shuffle(128) \
                 .batch(batch_size, drop_remainder=True) \
                 .repeat()
@@ -258,7 +287,10 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         logging.debug('Loading validation data...')
         validation_data = []
         for task in tasks:
-            task_data = self.load_task_data(task.dataset, task.split).batch(batch_size, drop_remainder=True)
+            task_data = self.load_task_data(task.dataset, task.split)
+            if not num_batches:
+                task_data = self.maybe_cache(task, task_data)
+            task_data = task_data.batch(batch_size, drop_remainder=True)
             if num_batches:
                 task_data = task_data.take(num_batches)
             validation_data.append(task_data)
@@ -284,28 +316,29 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         pass
 
     def _get_prediction_outputs(self,
-                                model,
-                                dataset,
-                                split,
+                                model: Model,
+                                task: Task,
                                 eval_batch_size: int,
                                 eval_batches: typing.Optional[int] = None, ):
         decoder_fn = functools.partial(self.decoder_fn, clean_up_tokenization_spaces=True)
 
-        task_data = self.load_task_data(dataset, split=split).batch(eval_batch_size, drop_remainder=False)
-
+        task_data = self.load_task_data(task.dataset, split=task.split)
+        if not eval_batches:
+            task_data = self.maybe_cache(task, task_data)
+        task_data = task_data.batch(eval_batch_size, drop_remainder=False)
         if eval_batches:
             task_data = task_data.take(eval_batches)
 
-        logging.info('Evaluating %s on %s', dataset, split)
-        inputs = task_data.map(lambda inputs_, targets_, sample_weights: inputs_)
+        logging.info('Evaluating %s', task)
+        inputs = task_data.map(lambda inputs_, targets__, sample_weights: inputs_)
 
         outputs = self.predict_task_split(model, inputs)
         if outputs is None:
             logging.warning('Task %s has no labels for split %s, so it will not be evaluated.',
-                            dataset, split)
+                            task.dataset, task.split)
             return None
 
-        targets = task_data.map(lambda inputs_, targets_, sample_weights: targets_).as_numpy_iterator()
+        targets = task_data.map(lambda inputs_, targets__, sample_weights: targets__).as_numpy_iterator()
         targets = np.concatenate(list(targets), axis=0)
         targets = np.squeeze(targets)
 
@@ -313,9 +346,9 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         for i, (inputs_, outputs_, targets_) in enumerate(zip(input_ids, outputs, targets), start=1):
             if i > LOG_EXAMPLES:
                 break
-            logging.info("Task %s[%s] Example %d Prompt: %s", dataset, split, i, decoder_fn(inputs_))
-            logging.info("Task %s[%s] Example %d Outputs: %s", dataset, split, i, decoder_fn(outputs_))
-            logging.info("Task %s[%s] Example %d Targets: %s", dataset, split, i, decoder_fn(targets_))
+            logging.info("Task %s Example %d Prompt: %s", task, i, decoder_fn(inputs_))
+            logging.info("Task %s Example %d Outputs: %s", task, i, decoder_fn(outputs_))
+            logging.info("Task %s Example %d Targets: %s", task, i, decoder_fn(targets_))
 
         return {
             'prompt': [decoder_fn(inputs_) for inputs_ in input_ids],
@@ -337,8 +370,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
 
             predictions[task.dataset][task.split] = functools.partial(self._get_prediction_outputs,
                                                                       model=model,
-                                                                      dataset=task.dataset,
-                                                                      split=task.split,
+                                                                      task=task,
                                                                       eval_batch_size=eval_batch_size,
                                                                       eval_batches=eval_batches)
         return predictions

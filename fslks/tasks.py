@@ -5,10 +5,10 @@ from fslks.datasets.argumentation import *
 from fslks.datasets.summarization import *
 
 
-def register_tasks():
+def register_task_mappings():
     sink.register('bioasq/single_doc',
-                  indicator=sink.Constant('bioasq single'),
                   input=sink.Sequence([
+                      sink.Constant('bioasq single'),
                       sink.Constant('question:'),
                       sink.Feature('question'),
                       sink.Constant('summarize:'),
@@ -215,8 +215,8 @@ def register_tasks():
                   target=sink.Sequence('answers'))
 
     sink.register('super_glue/copa',
-                  indicator=sink.Constant('copa'),
                   input=sink.Sequence([
+                      sink.Constant('copa'),
                       sink.Constant('choice1:'),
                       sink.Feature('choice1'),
                       sink.Constant('choice2:'),
@@ -227,8 +227,8 @@ def register_tasks():
                       sink.Feature('question')
                   ]),
                   target=sink.LabelMapping('label', {
-                      0: sink.Constant('False'),
-                      1: sink.Constant('True')
+                      0: sink.Constant('True'),
+                      1: sink.Constant('False')
                   }))
 
     _eviconv_stance_mapping = sink.LabelMapping('stance', {

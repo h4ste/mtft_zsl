@@ -3,7 +3,6 @@ import csv
 import os
 import faulthandler
 import signal
-import sys
 
 faulthandler.enable()
 faulthandler.register(signal.SIGUSR1)
@@ -107,7 +106,7 @@ def load_predictions(output_dir: str, testing_tasks) -> Predictions:
         # noinspection PyDefaultArgument
         predictions[task.dataset][task.split] = lambda t=results: t
 
-        logging.info('Loaded %d predictions for %s[%s]', len(prompts), task, split)
+        logging.info('Loaded %d predictions for %s', len(prompts), task)
     return predictions
 
 
@@ -116,10 +115,13 @@ def main(argv):
     del argv  # Unused.
 
     logging.set_verbosity(logging.DEBUG)
+
+    # Setup tfds parameters
     Task.data_dir = FLAGS.data_dir
     Task.add_checksum_dir(FLAGS.checksum_dir)
 
-    tasks.register_tasks()
+    # Register all our defined task mappings
+    tasks.register_task_mappings()
 
     experiment: experiments.Experiment
     if FLAGS.implementation == 'tensorflow':
@@ -178,11 +180,18 @@ def main(argv):
 
     if FLAGS.do_test:
         testing_tasks = Task.parse_test_tasks(FLAGS.testing_tasks)
-        predictions = load_predictions(FLAGS.prediction_dir, testing_tasks)
+        if FLAGS.prediction_dir:
+            predictions = load_predictions(FLAGS.prediction_dir, testing_tasks)
+        else:
+            logging.warning('--prediction_dir was not specified, generating predictions from scratch')
+            predictions = experiment.predict(model,
+                                             tasks=testing_tasks,
+                                             eval_batch_size=FLAGS.eval_batch_size,
+                                             eval_batches=FLAGS.eval_batches)
 
-        logging.info('Results:')
         evaluator = evaluation.get_evaluator(FLAGS.evaluation)
         results = evaluator.evaluate(predictions)
+        print('Results:')
         print(results)
 
     if not any([FLAGS.do_train, FLAGS.do_predict, FLAGS.do_test]):
