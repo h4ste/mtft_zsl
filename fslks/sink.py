@@ -13,6 +13,10 @@ SEP = ' '
 PROMPT_END = ':'
 
 
+def format_spaces(string):
+    return '_'.join(string.split())
+
+
 class LabelError(Exception):
 
     def __init__(self, message: str = None):
@@ -23,7 +27,7 @@ class LabelError(Exception):
         return self._message
 
 
-class Input(abc.ABC):
+class Mapping(abc.ABC):
 
     def validate(self, info: tfds.core.DatasetInfo) -> None:
         pass
@@ -32,26 +36,19 @@ class Input(abc.ABC):
     def to_tensor(self, elem: tfds.features.FeaturesDict) -> tf.Tensor:
         pass
 
-    @abc.abstractmethod
-    def to_str(self, elem: tfds.features.FeaturesDict) -> str:
-        pass
 
-
-class Constant(Input):
+class Constant(Mapping):
     def __init__(self, value: str):
         self._value = value
 
     def to_tensor(self, elem: tfds.features.FeaturesDict) -> tf.Tensor:
-        return tf.constant(self._value, dtype=tf.string, name='sink.Constant')
-
-    def to_str(self, elem: tfds.features.FeaturesDict) -> str:
-        return str(self._value)
+        return tf.constant(self._value, dtype=tf.string)
 
     def __str__(self):
         return self._value
 
 
-class Feature(Input):
+class Feature(Mapping):
     def __init__(self, key: str):
         self._key = key
 
@@ -61,15 +58,12 @@ class Feature(Input):
     def to_tensor(self, elem: tfds.features.FeaturesDict) -> tf.Tensor:
         return elem[self._key]
 
-    def to_str(self, elem: tfds.features.FeaturesDict) -> str:
-        return elem[self._key].decode('utf8')
-
     def __str__(self):
         return '[' + self._key + ']'
 
 
-class DictEntry(Input):
-    def __init__(self, dict_feature: str, entry_mapper: Input):
+class DictEntry(Mapping):
+    def __init__(self, dict_feature: str, entry_mapper: Mapping):
         self.dict_feature = dict_feature
         self.entry_mapper = entry_mapper
 
@@ -79,17 +73,14 @@ class DictEntry(Input):
             "\"%s\" was not a dictionary feature!" % self.dict_feature
 
     def to_tensor(self, elem: tfds.features.FeaturesDict) -> tf.Tensor:
-        return self.entry_mapper.to_tensor(elem[self.dict_feature])
-
-    def to_str(self, elem: tfds.features.FeaturesDict) -> str:
-        return self.entry_mapper.to_str(elem[self.dict_feature])
+        return tf.identity(self.entry_mapper.to_tensor(elem[self.dict_feature]))
 
     def __str__(self):
         return '[' + self.dict_feature + '].' + str(self.entry_mapper)
 
 
-class LabelMapping(Input):
-    def __init__(self, label_feature: str, mapping: typing.Mapping[int, Input]):
+class LabelSwitch(Mapping):
+    def __init__(self, label_feature: str, mapping: typing.Mapping[int, Mapping]):
         self.label = label_feature
         self.mapping = mapping
 
@@ -105,59 +96,60 @@ class LabelMapping(Input):
                                 default=lambda: 'NONE')
         return tensor
 
-    def to_str(self, elem: tfds.features.FeaturesDict) -> str:
-        return self.mapping[int(elem[self.label])].to_str(elem)
-
     def __str__(self):
         return 'Mapping[%s]' % self.label
 
 
-class Sequence(Input):
-    def __init__(self, inputs: typing.Union[str, typing.Iterable[Input]]):
+class Join(Mapping):
+    def __init__(self, inputs: typing.Iterable[Mapping]):
         self._inputs = inputs
 
-    def validate(self, info: tfds.features.FeaturesDict) -> None:
-        if isinstance(self._inputs, str):
-            assert self._inputs in info.features, "\"%s\" was not a valid feature name!" % self._inputs
-            assert isinstance(info.features[self._inputs], tfds.features.Sequence), \
-                "\"%s\" was not a Sequence feature" % self._inputs
-        elif isinstance(self._inputs, typing.Iterable):
-            [input_.validate(info) for input_ in self._inputs]
-        else:
-            # This shouldn't happen if Python is correctly type checking!
-            raise ValueError
+    def validate(self, info: tfds.core.DatasetInfo) -> None:
+        [input_.validate(info) for input_ in self._inputs]
 
     def to_tensor(self, elem: tfds.features.FeaturesDict) -> tf.Tensor:
-        if isinstance(self._inputs, str):
-            inputs = Feature(self._inputs).to_tensor(elem)
-        elif isinstance(self._inputs, typing.Iterable):
-            inputs = [input_.to_tensor(elem) for input_ in self._inputs]
-        else:
-            # This shouldn't happen if Python is correctly type checking!
-            raise ValueError
-
-        return tf.strings.join(inputs, separator=' ', name='sink.Sequence')
-
-    def to_str(self, elem: typing.Mapping[str, tf.Tensor]) -> str:
-        if isinstance(self._inputs, str):
-            return SEP.join(input_.numpy().decode('utf8') for input_ in elem[self._inputs])
-        elif isinstance(self._inputs, typing.Iterable):
-            return SEP.join(input_.to_str(elem) for input_ in self._inputs)
-        else:
-            # This shouldn't happen if Python is correctly type checking!
-            raise ValueError
+        inputs = [input_.to_tensor(elem) for input_ in self._inputs]
+        return tf.strings.join(inputs, separator=' ')
 
     def __str__(self):
-        if isinstance(self._inputs, str):
-            return '*[%s]' % self._inputs
-        elif isinstance(self._inputs, typing.Iterable):
-            return ' '.join(str(input_) for input_ in self._inputs)
+        return ' '.join(str(input_) for input_ in self._inputs)
+
+
+class Sequence(Mapping):
+    def __init__(self, key: typing.Union[str, DictEntry]):
+        self._key = key
+
+    def validate(self, info: tfds.features.FeaturesDict) -> None:
+        if isinstance(self._key, str):
+            key = self._key
+        elif isinstance(self._key, DictEntry):
+            key = self._key.dict_feature
         else:
-            # This shouldn't happen if Python is correctly type checking!
-            raise ValueError
+            raise ValueError('Unsupported key ' + str(type(self._key)) + ' for sink.Sequence')
+
+        assert key in info.features, "\"%s\" was not a valid feature name!" % self._key
+        assert isinstance(info.features[key], tfds.features.Sequence), \
+            "\"%s\" was not a Sequence feature" % self._key
+
+    def to_tensor(self, elem: tfds.features.FeaturesDict) -> tf.Tensor:
+        if isinstance(self._key, str):
+            inputs = Feature(self._key).to_tensor(elem)
+        elif isinstance(self._key, DictEntry):
+            inputs = self._key.to_tensor(elem)
+        else:
+            raise ValueError('Unsupported key ' + str(type(self._key)) + ' for sink.Sequence')
+        return tf.strings.reduce_join(inputs, separator=' ')
+
+    def __str__(self):
+        if isinstance(self._key, str):
+            return '*[%s]' % self._key
+        elif isinstance(self._key, DictEntry):
+            return '*' + str(self._key)
+        else:
+            raise ValueError('Unsupported key ' + str(type(self._key)) + ' for sink.Sequence')
 
 
-def register(dataset_name: str, input: Input, target: Input):
+def register(dataset_name: str, input: Mapping, target: Mapping):
     try:
         builder = tfds.builder(dataset_name)
     except DatasetNotFoundError:

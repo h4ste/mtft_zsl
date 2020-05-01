@@ -202,7 +202,10 @@ class Experiment(abc.ABC, typing.Generic[Model]):
 
         # tf.numpy_function can't handle dicts, so we need to flatten the output into a list
         def py_tokenize_example(string):
-            string = string.decode('utf-8')
+            try:
+                string = string.decode('utf-8')
+            except AttributeError as e:
+                logging.exception('In %s[%s]: failed to decode %s', dataset, split, string, exc_info=e)
             ex = self.encoder_fn(string)
             return [ex['input_ids'], ex['attention_mask'], ex['token_type_ids']]
 
