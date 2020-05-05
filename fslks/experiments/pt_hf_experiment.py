@@ -64,7 +64,8 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                  max_grad_norm: int = 1,
                  gradient_accumulation_steps: int = 1,
                  use_amp: bool = True,
-                 seed: typing.Optional[int] = None):
+                 seed: typing.Optional[int] = None,
+                 use_generate: bool = True):
         super().__init__(configuration_name=configuration_name, max_seq_len=max_seq_len, cache_dir=cache_dir, seed=seed)
         self.warmup_epochs = warmup_epochs
         self.max_grad_norm = max_grad_norm
@@ -73,6 +74,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if seed:
             torch.manual_seed(seed)
+        self.use_generate = use_generate
 
     def load_model(self, model_name: str) -> transformers.PreTrainedModel:
         model_name = model_name
@@ -117,8 +119,8 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                 raise ValueError('Forward method of %s did not have argument labels or lm_labels, only: %s' % (
                     model, forward_arg_names))
         else:
-            if isinstance(model, transformers.T5ForConditionalGeneration) or \
-                    isinstance(model, transformers.BartForConditionalGeneration):
+            if not self.use_generate and (isinstance(model, transformers.T5ForConditionalGeneration) or
+                                          isinstance(model, transformers.BartForConditionalGeneration)):
                 # We are dealing with a conditional model so we need to rename inputs
                 params['decoder_input_ids'] = params['input_ids']
                 params['decoder_attention_mask'] = params['attention_mask']
@@ -245,10 +247,14 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                 with torch.no_grad():
                     model.eval()
                     forward_params = self.get_forward_params(model, batch_inputs)
-                    batch_logits = model(**forward_params)[0]
-                    # Pull the logits out of torch's graph
-                    batch_logits = batch_logits.detach().cpu().numpy()
-                    batch_outputs = np.argmax(batch_logits, axis=-1)
+                    if self.use_generate:
+                        batch_outputs = model.generate(**forward_params, max_length=self.max_seq_len)
+                        batch_outputs = batch_outputs.detach().cpu().numpy()
+                    else:
+                        batch_logits = model(**forward_params)[0]
+                        # Pull the logits out of torch's graph
+                        batch_logits = batch_logits.detach().cpu().numpy()
+                        batch_outputs = np.argmax(batch_logits, axis=-1)
                     outputs.append(batch_outputs)
         # We can't just except tf.errors.UnknownError, because it is thrown as some sort of weird proxy
         # instance of a tf.errors.UnknownError and python's pattern matching can't handle the scandal
