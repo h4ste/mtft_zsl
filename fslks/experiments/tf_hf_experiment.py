@@ -133,7 +133,7 @@ class TFExperiment(Experiment[tf.keras.Model]):
         for metric, values in history.history.items():
             logging.info('%s: %s', metric, values)
 
-    def predict_task_split(self, model, inputs: tf.data.Dataset) -> typing.Optional[np.ndarray]:
+    def predict_task_split(self, model, inputs: tf.data.Dataset, task: Task) -> typing.Optional[np.ndarray]:
         try:
             logits = model.predict(inputs, verbose=1)
         # We can't just except tf.errors.UnknownError, because it is thrown as some sort of weird proxy

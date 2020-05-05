@@ -251,7 +251,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         if self.cache_dir == 'MEMORY':
             return data.cache()
         elif self.cache_dir:
-            cache_file = os.path.join(self.cache_dir, '%s.%s.cache' % (task.dataset, task.split))
+            cache_file = os.path.join(self.cache_dir, self.config.model_type, '%s.%s.cache' % (task.dataset, task.split))
             # If we have configuration details, they create intermediate directories that need to be created
             os.makedirs(os.path.join(cache_file, os.pardir), exist_ok=True)
             logging.debug('Caching tokenized data for %s to %s', task, cache_file)
@@ -313,7 +313,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         pass
 
     @abc.abstractmethod
-    def predict_task_split(self, model, data: tf.data.Dataset) -> np.ndarray:
+    def predict_task_split(self, model, data: tf.data.Dataset, task: Task) -> np.ndarray:
         pass
 
     def _get_prediction_outputs(self,
@@ -333,7 +333,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         logging.info('Evaluating %s', task)
         inputs = task_data.map(lambda inputs_, targets__, sample_weights: inputs_)
 
-        outputs = self.predict_task_split(model, inputs)
+        outputs = self.predict_task_split(model, inputs, task)
         if outputs is None:
             logging.warning('Task %s has no labels for split %s, so it will not be evaluated.',
                             task.dataset, task.split)

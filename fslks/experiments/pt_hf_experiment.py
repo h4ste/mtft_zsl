@@ -1,17 +1,26 @@
+import logging
 import typing
 
 import numpy as np
 import tensorflow as tf
 import torch
 import torch.nn
-from torch.optim.optimizer import Optimizer
-
 import tqdm.auto as tqdm
-
 import transformers
-import logging
 
 from fslks.experiments import Experiment, Task
+
+try:
+    from apex import amp
+    _has_apex = True
+except ImportError:
+    amp = None
+    _has_apex = False
+
+
+def is_apex_available():
+    return _has_apex
+
 
 INPUT_DTYPES = {
     'input_ids': torch.long,
@@ -23,10 +32,12 @@ INPUT_DTYPES = {
 
 
 def get_optimizer(model: torch.nn.Module,
+                  num_training_steps: int,
+                  num_warmup_steps: int,
                   weight_decay: float = 0.,
                   lr: float = 5e-5,
-                  epsilon: float = 1e-8) -> Optimizer:
-    # Prepare optimizer for weight decay
+                  epsilon: float = 1e-8) -> typing.Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR]:
+    # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
@@ -37,7 +48,10 @@ def get_optimizer(model: torch.nn.Module,
          "weight_decay": 0.0},
     ]
     optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=lr, eps=epsilon)
-    return optimizer
+    scheduler = transformers.get_linear_schedule_with_warmup(
+        optimizer=optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps
+    )
+    return optimizer, scheduler
 
 
 class PTExperiment(Experiment[transformers.PreTrainedModel]):
@@ -69,6 +83,8 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             # HuggingFace named T5's sequence generator "ConditionalGeneration" rather than "LanguageModeling"
             # like the others, so we need to load it separately.
             model = transformers.T5ForConditionalGeneration.from_pretrained(model_name, config=self.config)
+        elif model_name.startswith('bart'):
+            model = transformers.BartForConditionalGeneration.from_pretrained(model_name, config=self.config)
         else:
             model = transformers.AutoModelWithLMHead.from_pretrained(model_name, config=self.config)
 
@@ -101,12 +117,34 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                 raise ValueError('Forward method of %s did not have argument labels or lm_labels, only: %s' % (
                     model, forward_arg_names))
         else:
-            if isinstance(model, transformers.T5ForConditionalGeneration):
-                # We are dealing with T5 so we need to rename inputs
+            if isinstance(model, transformers.T5ForConditionalGeneration) or \
+                    isinstance(model, transformers.BartForConditionalGeneration):
+                # We are dealing with a conditional model so we need to rename inputs
                 params['decoder_input_ids'] = params['input_ids']
                 params['decoder_attention_mask'] = params['attention_mask']
 
         return params
+
+    def _train_step(self,
+                    model: torch.nn.Module,
+                    inputs: typing.Dict[str, np.ndarray],
+                    labels: np.ndarray,
+                    optimizer: torch.optim.Optimizer) -> float:
+        model.train()
+
+        # Run the forward pass
+        loss = model(**self.get_forward_params(model, inputs, labels))[0]
+
+        if self.gradient_accumulation_steps > 1:
+            loss = loss / self.gradient_accumulation_steps
+
+        if self.use_amp:
+            with amp.scale_loss(loss, optimizer) as scaled_loss:
+                scaled_loss.backward()
+        else:
+            loss.backward()
+
+        return loss.item()
 
     def train(self,
               model: transformers.PreTrainedModel,
@@ -137,58 +175,41 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             validation_data = None
             logging.info('Preparing kitchen sink without validation')
 
-        opt: Optimizer = get_optimizer(model)
-
-        if self.use_amp:
-            try:
-                from apex import amp
-            except ImportError:
-                raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
-            model: transformers.PreTrainedModel
-            model, opt = amp.initialize(model, opt, opt_level='O1')
-
         num_epochs += self.warmup_epochs
-        scheduler = transformers.get_linear_schedule_with_warmup(
-            optimizer=opt,
-            num_warmup_steps=self.warmup_epochs * steps_per_epoch,
-            num_training_steps=num_epochs * steps_per_epoch
-        )
+        optimizer, scheduler = get_optimizer(model,
+                                             num_warmup_steps=self.warmup_epochs * steps_per_epoch,
+                                             num_training_steps=num_epochs * steps_per_epoch)
 
-        # Prepare optimizer and schedule (linear warmup and decay)
         model.to(self.device)
-        model.zero_grad()
+        if self.use_amp:
+            if not is_apex_available():
+                raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
+            model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
+
         global_step = 0
-        epoch_itr = tqdm.trange(0, num_epochs * steps_per_epoch, desc="Training", )
+        tr_loss = 0.0
+        logging_loss = 0.0
+        model.zero_grad()
+        train_itr = tqdm.trange(0, num_epochs * steps_per_epoch, desc="Training", unit="batch")
         for epoch in range(1, num_epochs + 1):
-            running_loss = 0.
-            training_itr = tqdm.tqdm(training_data, desc="Epoch %d" % epoch, initial=1, leave=True, unit=" steps")
-            training_steps = 0
-            for step, (inputs, labels, _) in enumerate(training_itr, 1):
-                epoch_itr.update()
-                model.train()
+            epoch_itr = tqdm.trange(0, steps_per_epoch, desc="Epoch %d" % epoch, leave=False, unit="batch")
+            for step in epoch_itr:
+                inputs, labels, _ = next(training_data)
+                tr_loss += self._train_step(model, inputs, labels, optimizer)
+                train_itr.update()
 
-                # Run the forward pass
-                loss = model(**self.get_forward_params(model, inputs, labels))[0]
+                if (step + 1) % self.gradient_accumulation_steps == 0 or (
+                        # last step in epoch but step is always smaller than gradient_accumulation_steps
+                        self.gradient_accumulation_steps >= steps_per_epoch == (step + 1)):
+                    if self.use_amp:
+                        torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), self.max_grad_norm)
+                    else:
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), self.max_grad_norm)
 
-                # Run the backwards pass
-                if self.use_amp:
-                    with amp.scale_loss(loss, opt) as scaled_loss:
-                        scaled_loss.backward()
-                else:
-                    loss.backward()
-
-                running_loss += loss.item()
-                if step % self.gradient_accumulation_steps == 0:
-                    params = amp.master_params(opt) if self.use_amp else model.parameters()
-                    torch.nn.utils.clip_grad_norm_(params, self.max_grad_norm)
-                    opt.step()
+                    optimizer.step()
                     scheduler.step()
                     model.zero_grad()
                     global_step += 1
-
-                training_steps += 1
-                if step == steps_per_epoch:
-                    break
 
             valid_steps = 0
             running_valid_loss = 0.
@@ -197,24 +218,30 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                     for step, (inputs, labels, _) in enumerate(validation_data.as_numpy_iterator(), 1):
                         model.eval()
                         # Run the forward pass
-                        loss = model(**self.get_forward_params(model, inputs, labels))[0]
-                        running_valid_loss += loss.item()
-                    valid_steps += 1
+                        running_valid_loss += model(**self.get_forward_params(model, inputs, labels))[0].item()
+                        valid_steps += 1
 
-            training_itr.set_postfix_str('Global step: %d, tr_loss: %f, val_loss: %f' % (
+            lr = scheduler.get_last_lr()[0]
+            loss_sclar = (tr_loss - logging_loss) / steps_per_epoch
+            logging_loss = tr_loss
+            train_itr.write('Global step: %d, lr: %g, loss: %g, val_loss: %g' % (
                 global_step,
-                running_loss / training_steps,
+                lr,
+                loss_sclar,
                 running_valid_loss / valid_steps if valid_steps > 0 else np.NaN))
 
-            training_itr.close()
-        epoch_itr.close()
+        train_itr.close()
 
-    def predict_task_split(self, model: transformers.PreTrainedModel, inputs: tf.data.Dataset) -> \
-            typing.Optional[np.ndarray]:
+    def predict_task_split(self,
+                           model: transformers.PreTrainedModel,
+                           inputs: tf.data.Dataset,
+                           task: Task) -> typing.Optional[np.ndarray]:
         try:
             outputs = []
             model.to(self.device)
-            for batch_inputs in tqdm.tqdm(inputs.as_numpy_iterator(), desc="Predicting"):
+            for batch_inputs in tqdm.tqdm(inputs.as_numpy_iterator(),
+                                          desc="Predicting %s" % task,
+                                          unit="batch", leave=False):
                 with torch.no_grad():
                     model.eval()
                     forward_params = self.get_forward_params(model, batch_inputs)
