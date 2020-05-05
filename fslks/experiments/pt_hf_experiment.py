@@ -250,6 +250,12 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                     if self.use_generate:
                         batch_outputs = model.generate(**forward_params, max_length=self.max_seq_len)
                         batch_outputs = batch_outputs.detach().cpu().numpy()
+                        # Generate doesn't pad sentences to max_seq_len, and we need to for numpy
+                        output_shape = batch_outputs.shape
+                        if output_shape[1] != self.max_seq_len:
+                            padding = np.full(shape=(output_shape[0], self.max_seq_len - output_shape[1]),
+                                              fill_value=self.config.eos_token_id)
+                            batch_outputs = np.concatenate([batch_outputs, padding], axis=1)
                     else:
                         batch_logits = model(**forward_params)[0]
                         # Pull the logits out of torch's graph

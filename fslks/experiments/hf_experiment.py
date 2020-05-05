@@ -165,7 +165,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
             transformers.AutoTokenizer.from_pretrained(configuration_name, config=self.config)
 
         if not self.tokenizer.pad_token:
-            self.tokenizer.pad_token = '[PAD]'
+            self.tokenizer.pad_token = self.tokenizer.eos_token
 
         self.encoder_fn = functools.partial(self.tokenizer.encode_plus,
                                             add_special_tokens=False,
