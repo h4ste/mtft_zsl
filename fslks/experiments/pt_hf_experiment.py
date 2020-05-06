@@ -64,8 +64,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                  max_grad_norm: int = 1,
                  gradient_accumulation_steps: int = 1,
                  use_amp: bool = True,
-                 seed: typing.Optional[int] = None,
-                 use_generate: bool = True):
+                 seed: typing.Optional[int] = None):
         super().__init__(configuration_name=configuration_name, max_seq_len=max_seq_len, cache_dir=cache_dir, seed=seed)
         self.warmup_epochs = warmup_epochs
         self.max_grad_norm = max_grad_norm
@@ -74,7 +73,6 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if seed:
             torch.manual_seed(seed)
-        self.use_generate = use_generate
 
     def load_model(self, model_name: str) -> transformers.PreTrainedModel:
         model_name = model_name
@@ -118,12 +116,6 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             else:
                 raise ValueError('Forward method of %s did not have argument labels or lm_labels, only: %s' % (
                     model, forward_arg_names))
-        else:
-            if not self.use_generate and (isinstance(model, transformers.T5ForConditionalGeneration) or
-                                          isinstance(model, transformers.BartForConditionalGeneration)):
-                # We are dealing with a conditional model so we need to rename inputs
-                params['decoder_input_ids'] = params['input_ids']
-                params['decoder_attention_mask'] = params['attention_mask']
 
         return params
 
@@ -237,7 +229,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
     def predict_task_split(self,
                            model: transformers.PreTrainedModel,
                            inputs: tf.data.Dataset,
-                           task: Task) -> typing.Optional[np.ndarray]:
+                           task: Task) -> typing.Sequence[typing.Sequence[int]]:
         try:
             outputs = []
             model.to(self.device)
@@ -247,30 +239,27 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                 with torch.no_grad():
                     model.eval()
                     forward_params = self.get_forward_params(model, batch_inputs)
-                    if self.use_generate:
-                        batch_outputs = model.generate(**forward_params, max_length=self.max_seq_len)
-                        batch_outputs = batch_outputs.detach().cpu().numpy()
-                        # Generate doesn't pad sentences to max_seq_len, and we need to for numpy
-                        output_shape = batch_outputs.shape
-                        if output_shape[1] != self.max_seq_len:
-                            padding = np.full(shape=(output_shape[0], self.max_seq_len - output_shape[1]),
-                                              fill_value=self.config.eos_token_id)
-                            batch_outputs = np.concatenate([batch_outputs, padding], axis=1)
-                    else:
-                        batch_logits = model(**forward_params)[0]
-                        # Pull the logits out of torch's graph
-                        batch_logits = batch_logits.detach().cpu().numpy()
-                        batch_outputs = np.argmax(batch_logits, axis=-1)
-                    outputs.append(batch_outputs)
+                    batch_outputs = model.generate(**forward_params,
+                                                   do_sample=True,
+                                                   max_length=140 + 2,
+                                                   min_length=55 + 1,
+                                                   num_beams=4,
+                                                   length_penalty=2.,
+                                                   no_repeat_ngram_size=3,
+                                                   early_stopping=True)
+
+                    batch_outputs = batch_outputs.detach().cpu().numpy()
+                    outputs.extend(batch_outputs)
+            return outputs
         # We can't just except tf.errors.UnknownError, because it is thrown as some sort of weird proxy
         # instance of a tf.errors.UnknownError and python's pattern matching can't handle the scandal
         except Exception as e:
             if isinstance(e, tf.errors.UnknownError):
+                logging.warning('Encountered error: %s on %s: %s', type(e), task, e)
                 # Unfortunately, we don't get a more helpful error type, but this usually means
                 # that the dataset has no labels for a given split (e.g., test evaluation occurs on a server)
-                return None
+                return []
             else:
                 # We got a different exception type so let python freak out accordingly
-                logging.warning('Encountered error: %s, %s', type(e), e)
+                logging.error('Encountered error: %s on %s: %s', type(e), task, e)
                 raise e
-        return np.concatenate(outputs, axis=0)

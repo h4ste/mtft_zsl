@@ -176,7 +176,9 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                                             return_token_type_ids=True,
                                             return_attention_mask=True)
 
-        self.decoder_fn = functools.partial(self.tokenizer.decode, skip_special_tokens=True)
+        self.decoder_fn = functools.partial(self.tokenizer.decode,
+                                            skip_special_tokens=True,
+                                            clean_up_tokenization_spaces=False)
 
     def save_model(self, model: Model, path: str):
         model.save_pretrained(path)
@@ -313,7 +315,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         pass
 
     @abc.abstractmethod
-    def predict_task_split(self, model, data: tf.data.Dataset, task: Task) -> np.ndarray:
+    def predict_task_split(self, model, data: tf.data.Dataset, task: Task) -> typing.Sequence[typing.Sequence[int]]:
         pass
 
     def _get_prediction_outputs(self,
@@ -321,7 +323,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                                 task: Task,
                                 eval_batch_size: int,
                                 eval_batches: typing.Optional[int] = None, ):
-        decoder_fn = functools.partial(self.decoder_fn, clean_up_tokenization_spaces=True)
+        decoder_fn = self.decoder_fn
 
         task_data = self.load_task_data(task.dataset, split=task.split)
         if not eval_batches:
@@ -334,7 +336,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         inputs = task_data.map(lambda inputs_, targets__, sample_weights: inputs_)
 
         outputs = self.predict_task_split(model, inputs, task)
-        if outputs is None:
+        if not outputs:
             logging.warning('Task %s has no labels for split %s, so it will not be evaluated.',
                             task.dataset, task.split)
             return None
