@@ -164,8 +164,11 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         self.tokenizer: transformers.PreTrainedTokenizer = \
             transformers.AutoTokenizer.from_pretrained(configuration_name, config=self.config)
 
-        if not self.tokenizer.pad_token:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
+        # if not self.tokenizer.pad_token:
+        #     self.tokenizer.pad_token = self.tokenizer.eos_token
+        #     self.config.pad_token_id = self.tokenizer.pad_token_id
+        #     logging.warning('Tokenizer does not provide a pad token, using %s (id: %d)',
+        #                     self.tokenizer.pad_token, self.tokenizer.pad_token_id)
 
         self.encoder_fn = functools.partial(self.tokenizer.encode_plus,
                                             add_special_tokens=False,
