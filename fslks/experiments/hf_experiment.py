@@ -11,6 +11,12 @@ import transformers
 
 from fslks import sink
 
+# For memory leak:
+from tensorflow.python.eager import context
+from tensorflow.python.framework import random_seed
+import gorilla
+import random
+
 # Type variable for Experiments
 Model = typing.TypeVar('Model')
 
@@ -152,6 +158,8 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                  seed: typing.Optional[int] = None):
         self.max_seq_len = max_seq_len
         self.cache_dir = cache_dir
+        # For dataset sizes
+        self.dataset_info = {}
 
         if seed:
             np.random.seed(seed)
@@ -203,6 +211,8 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         assert self.decoder_fn is not None
         logging.debug('Loading %s data for dataset %s', split, dataset)
         builder, info = Task.get_or_load_dataset(dataset)
+        # Get the size of the dataset
+        self.dataset_info[dataset] = info.splits[split].num_examples
         data: tf.data.Dataset = builder.as_dataset(split=split, shuffle_files=True)
 
         # tf.numpy_function can't handle dicts, so we need to flatten the output into a list
@@ -268,21 +278,68 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                         tasks: typing.Sequence[Task],
                         batch_size: int,
                         prefetch_size: int) -> tf.data.Dataset:
+
+        # Unsucessful attempt at memory leak patch
+        # I didn't check to see how sample_from_dataset
+        # internally checks for the seed yet, but this fix 
+        # was intended for tf.random.uniform originally
+        # which calls get_seed internally
+        DEFAULT_OP_SEED = 1923746
+        # Defines the function
+        def better_get_seed(global_seed, op_seed):
+            if op_seed is not None:
+                return global_seed, op_seed
+            else:
+                return global_seed, DEFAULT_OP_SEED
+
+        # Monkey Patch get_seed.
+        def set_seed(seed=100):
+            np.random.seed(seed)
+            # Monkey Patch get_seed.
+            func = lambda op_seed: better_get_seed(seed, op_seed)
+            settings = gorilla.Settings(allow_hit=True, store_hit=True)
+            patch = gorilla.Patch(
+                random_seed, 'get_seed', func, settings=settings)
+            gorilla.apply(patch)
+        
+        set_seed()
+
         logging.debug('Loading training data...')
         training_data = []
+        dataset_sizes = []
         for task in tasks:
             dataset = self.load_task_data(task.dataset, task.split, decode=True)
+            dataset_sizes.append(self.dataset_info[task.dataset])
             dataset = self.maybe_cache(task, dataset) \
                 .shuffle(128) \
                 .batch(batch_size, drop_remainder=True) \
                 .repeat()
             training_data.append(dataset)
 
-        # This an array specifying which dataset should be used for each training iteration for one Epoch
-        # Because tasks are already batched, we determine the number of batches in an epoch,
-        # and sample a dataset for each batch.
-        choices = tf.data.Dataset.range(len(tasks)).repeat().shuffle(128)
-        training_data = tf.data.experimental.choose_from_datasets(training_data, choices)
+        # Dataset mixing if using more than one training dataset
+        if len(dataset_sizes) > 1:
+            mixing_rates = []
+            # Artifically large k 
+            K = 2e21
+            # Temperature for scaling. As T nears one, scaling becomes equal to proportional mixing with max K
+            T = 2
+            # Take the sum of the size of the datasets, choosing between K and size of dataset n for each term
+            # in the summation
+            min_summ = sum(map(lambda e: min(e, K), dataset_sizes))
+            mixing_rates = [min(e, K) / min_summ for e in dataset_sizes]
+            scaled_rates = [r**(1 / T) for r in mixing_rates]
+            normalized_rates = [r / sum(scaled_rates) for r in scaled_rates] 
+            logging.info("Normalized mixing rates: {}".format(normalized_rates))
+            training_data = tf.data.experimental.sample_from_datasets(
+                        training_data, weights=normalized_rates, seed=None
+                        )
+        else: 
+            # This an array specifying which dataset should be used for each training iteration for one Epoch
+            # Because tasks are already batched, we determine the number of batches in an epoch,
+            # and sample a dataset for each batch.
+            choices = tf.data.Dataset.range(len(tasks)).repeat().shuffle(128)
+            training_data = tf.data.experimental.choose_from_datasets(training_data, choices)
+
         return training_data.prefetch(prefetch_size)
 
     def load_valid_data(self,
