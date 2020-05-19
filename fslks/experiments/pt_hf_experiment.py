@@ -24,6 +24,7 @@ def is_apex_available():
 
 INPUT_DTYPES = {
     'input_ids': torch.long,
+    'decoder_input_ids': torch.long,
     'attention_mask': torch.float32,
     'token_type_ids': torch.long,
     'position_ids': torch.long,
@@ -65,6 +66,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                  gradient_accumulation_steps: int = 1,
                  use_amp: bool = True,
                  seed: typing.Optional[int] = None):
+        tf.config.experimental.set_visible_devices([], 'GPU')
         super().__init__(configuration_name=configuration_name, max_seq_len=max_seq_len, cache_dir=cache_dir, seed=seed)
         self.warmup_epochs = warmup_epochs
         self.max_grad_norm = max_grad_norm
@@ -99,7 +101,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         # so we need to iterate through all the tensors returned by the tokenizer (i.e., inputs) and
         # (a) check if they are in the signature of the model's forward method (gross)
         # and then (b) cast them to the correct type and put them on the GPU
-        forward_arg_names = model.forward.__code__.co_varnames
+        forward_arg_names = set(model.forward.__code__.co_varnames)
 
         params = {k: torch.from_numpy(v).to(device=self.device, dtype=INPUT_DTYPES[k])
                   for k, v in inputs.items()

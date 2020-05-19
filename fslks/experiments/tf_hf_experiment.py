@@ -1,11 +1,12 @@
 import typing
 
-import numpy as np
 import tensorflow.compat.v2 as tf
 import tensorflow.keras as keras
+import tensorflow.keras.backend as K
 import tensorflow_addons as tfa
 import transformers
 from absl import logging
+import tqdm.auto as tqdm
 
 from fslks.experiments import Experiment
 from fslks.experiments import Task
@@ -19,21 +20,59 @@ def configure_tf(use_xla: bool = False,
     tf.config.optimizer.set_experimental_options({'auto_mixed_precision': use_amp})
 
 
+class Logits2Softmax(keras.metrics.Metric):
+
+    def __init__(self, metric: keras.metrics.Metric):
+        super().__init__(name=f'l2s_{metric.name}', dtype=metric.dtype)
+        self.metric = metric
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        self.metric.update_state(y_true=y_true,
+                                 y_pred=K.softmax(y_pred, axis=-1),
+                                 sample_weight=sample_weight)
+
+    def result(self):
+        return self.metric.result()
+
+    def reset_states(self):
+        return self.metric.reset_states()
+
+
 class TransformerOutputWrapper(keras.Model):
 
     def __init__(self, model: transformers.TFPreTrainedModel):
         super().__init__()
         self.model = model
+        self.save_pretrained = self.model.save_pretrained
+        self.generate = self.model.generate
 
     def call(self, inputs, **kwargs):
+        logging.debug('Attempting forward call with inputs: %s', inputs)
         outputs = self.model(inputs, **kwargs)
+
         if isinstance(outputs, tuple):
-            logging.info('Outputs was a tuple, returning %s instead', outputs[0])
-            return outputs[0]
-        elif isinstance(outputs, tf.Tensor):
+            outputs = outputs[0]
+
+        if isinstance(outputs, tf.Tensor):
             return outputs
         else:
             raise ValueError('Unexpected outputs (type: %s): %s', type(outputs), outputs)
+
+
+class T5OutputWrapper(TransformerOutputWrapper):
+
+    def __init__(self, model: transformers.TFPreTrainedModel):
+        assert isinstance(model, transformers.TFT5ForConditionalGeneration)
+        super().__init__(model)
+
+    def call(self, inputs, training=False, **kwargs):
+        # T5 weirdly uses 'inputs' rather than input_ids. This was changed sometime after 2.8. No idea why.
+        inputs['inputs'] = inputs['input_ids']
+        del inputs['input_ids']
+
+        # inputs['inputs'] = None
+
+        return super().call(inputs=inputs, training=training, **kwargs)
 
 
 class TFExperiment(Experiment[tf.keras.Model]):
@@ -57,10 +96,10 @@ class TFExperiment(Experiment[tf.keras.Model]):
             # HuggingFace named T5's sequence generator "ConditionalGeneration" rather than "LanguageModeling"
             # like the others, so we need to load it separately.
             model = transformers.TFT5ForConditionalGeneration.from_pretrained(model_name, config=self.config)
+            return T5OutputWrapper(model)
         else:
             model = transformers.TFAutoModelWithLMHead.from_pretrained(model_name, config=self.config)
-
-        return TransformerOutputWrapper(model)
+            return TransformerOutputWrapper(model)
 
     @staticmethod
     def compile_model(model: tf.keras.Model,
@@ -76,7 +115,9 @@ class TFExperiment(Experiment[tf.keras.Model]):
             logging.debug('Enabling loss scaling')
             opt = keras.mixed_precision.experimental.LossScaleOptimizer(opt, 'dynamic')
 
-        loss = keras.losses.SparseCategoricalCrossentropy(name='loss', reduction=keras.losses.Reduction.SUM)
+        loss = keras.losses.SparseCategoricalCrossentropy(name='loss',
+                                                          reduction=keras.losses.Reduction.SUM,
+                                                          from_logits=True)
         metric = keras.metrics.SparseCategoricalAccuracy('accuracy')
 
         model.compile(optimizer=opt, loss=loss, weighted_metrics=[metric], sample_weight_mode='temporal')
@@ -99,12 +140,12 @@ class TFExperiment(Experiment[tf.keras.Model]):
         # Stop training if validation loss fails to decrease for 3 epochs
         callbacks = [
             keras.callbacks.EarlyStopping(monitor='val_accuracy',
-                                          patience=5,
+                                          patience=3,
                                           mode='max',
                                           restore_best_weights=True),
             keras.callbacks.TerminateOnNaN(),
         ]
-        #
+
         # If requested, save model checkpoints
         if checkpoint_file:
             logging.info('Saving checkpoints to %s', checkpoint_file)
@@ -135,7 +176,20 @@ class TFExperiment(Experiment[tf.keras.Model]):
 
     def predict_task_split(self, model, inputs: tf.data.Dataset, task: Task):
         try:
-            logits = model.predict(inputs, verbose=1)
+            outputs = []
+            for step, batch_inputs in enumerate(tqdm.tqdm(inputs)):
+                logging.info('Batch Inputs: %s', batch_inputs)
+                batch_outputs = model.generate(input_ids=batch_inputs['input_ids'],
+                                               attention_mask=batch_inputs.get('attention_mask'),
+                                               do_sample=True,
+                                               max_length=140 + 2,
+                                               min_length=55 + 1,
+                                               num_beams=4,
+                                               length_penalty=.6,
+                                               no_repeat_ngram_size=3,
+                                               early_stopping=True)
+                outputs.extend(batch_outputs)
+            return outputs
         # We can't just except tf.errors.UnknownError, because it is thrown as some sort of weird proxy
         # instance of a tf.errors.UnknownError and python's pattern matching can't handle the scandal
         except Exception as e:
@@ -147,7 +201,3 @@ class TFExperiment(Experiment[tf.keras.Model]):
                 # We got a different exception type so let python freak out accordingly
                 logging.warning('Encountered error: %s, %s', type(e), e)
                 raise e
-
-        logging.info('Logits Shape=%s; Logits=%s', logits.shape, logits)
-        outputs = np.argmax(logits, axis=-1)
-        return list(outputs)
