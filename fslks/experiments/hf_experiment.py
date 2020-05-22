@@ -15,6 +15,7 @@ from tensorflow.python.eager import context as tf_eager_context
 from tensorflow.python.framework import random_seed
 
 from fslks import sink
+from fslks.sink import Task
 
 # Type variable for Experiments
 Model = typing.TypeVar('Model')
@@ -25,102 +26,6 @@ TaskPredictions = typing.MutableMapping[typing.Union[tfds.Split, str], typing.Ca
 Predictions = typing.MutableMapping[str, TaskPredictions]
 
 LOG_EXAMPLES: int = 1
-
-
-class Task(object):
-    dataset: str
-    split: typing.Union[str, tfds.Split, None]
-
-    data_dir: str = None
-
-    def __init__(self, dataset: str, split: typing.Union[str, tfds.Split, None]):
-        self.dataset = dataset
-        self.split = split
-
-    @classmethod
-    def parse(cls, string: str):
-        """Parses a command-line specified dataset and split string to determine the dataset and optionally the split
-        e.g., "super_glue/copa" -> Task(dataset="super_glue/copa", split=None)
-              "super_glue/copa::train" -> Task(dataset="super_glue/copa", split="train")
-        :param string: dataset and split string,
-        :return: a new Task object
-        """
-        task = string.split("::")
-        if len(task) == 1:
-            dataset = task[0]
-            split = None
-        elif len(task) == 2:
-            dataset = task[0]
-            split = task[1]
-        else:
-            raise ValueError("Received unexpected dataset specification.")
-
-        return Task(dataset, split)
-
-    def _get_split_or_else(self, alternative: tfds.Split):
-        if self.split is not None:
-            return self.split
-        elif Task.split_in_dataset(alternative, self.dataset):
-            return alternative
-        else:
-            logging.warning('%s: dataset %s has no %s split and no alternative split was specified.',
-                            self, self.dataset, alternative)
-            return None
-
-    @staticmethod
-    def _parse_tasks(task_strs: typing.Iterable[str], fallback_split: typing.Optional[tfds.Split] = None):
-        tasks = []
-        for task_str in task_strs:
-            task = Task.parse(task_str)
-
-            if fallback_split:
-                split = task._get_split_or_else(fallback_split)
-                task = Task(dataset=task.dataset, split=split)
-
-            if task.split is None:
-                continue
-
-            tasks.append(task)
-        return tasks
-
-    @staticmethod
-    def parse_train_tasks(task_strs: typing.Iterable[str]):
-        return Task._parse_tasks(task_strs, fallback_split=tfds.Split.TRAIN)
-
-    @staticmethod
-    def parse_validation_tasks(task_strs: typing.Iterable[str]):
-        return Task._parse_tasks(task_strs, fallback_split=tfds.Split.VALIDATION)
-
-    @staticmethod
-    def parse_test_tasks(task_strs: typing.Iterable[str]):
-        return Task._parse_tasks(task_strs, fallback_split=tfds.Split.TEST)
-
-    def __str__(self):
-        return '%s[%s]' % (self.dataset, self.split)
-
-    def __repr__(self):
-        return self.__str__()
-
-    @staticmethod
-    @functools.lru_cache(maxsize=None)
-    def get_or_load_dataset(name: str) -> (tfds.core.DatasetBuilder, tfds.core.DatasetInfo):
-        builder: tfds.core.DatasetBuilder = tfds.builder(name, data_dir=Task.data_dir)
-        builder.download_and_prepare()
-        info: tfds.core.DatasetInfo = builder.info
-        return builder, info
-
-    @staticmethod
-    def split_in_dataset(split: tfds.Split, dataset: str):
-        _, info = Task.get_or_load_dataset(dataset)
-        # logging.debug('Looking for %s in %s of %s', split, info.splits, dataset)
-        return split in info.splits
-
-    @classmethod
-    def add_checksum_dir(cls, checksum_dir: str):
-        if checksum_dir:
-            tfds.download.add_checksums_dir(
-                checksum_dir,
-            )
 
 
 def concatenate(datasets: typing.Iterable[tf.data.Dataset]):
@@ -224,6 +129,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         :param dataset: Name of dataset to load
         :param split: Name of split to load
         :param decode: Whether to log & decode examples
+        :param train: Whether we are training or not
         :return: a tf.data.Datasets
         """
         assert self.encoder_fn is not None
@@ -427,7 +333,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                 model: Model,
                 tasks: typing.List[Task],
                 eval_batch_size: int,
-                eval_batches: typing.Optional[int] = None, ) -> Predictions:
+                eval_batches: typing.Optional[int] = None) -> Predictions:
         predictions: Predictions = {}
 
         for task in tasks:
