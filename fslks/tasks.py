@@ -172,6 +172,26 @@ def register_task_mappings():
                   ]),
                   target=sink.Feature('summary'))
 
+    sink.register('duc/2004',
+                  input=sink.Join([
+                      sink.Constant('duc 2004'),
+                      sink.Constant('summarize:'),
+                      sink.Feature('document')
+                  ]),
+                  target=sink.Feature('summary'))
+
+    sink.register('duc/2007',
+                  input=sink.Join([
+                      sink.Constant('duc 2004'),
+                      sink.Constant('summarize:'),
+                      sink.Constant('question:'),
+                      sink.Feature('question'),
+                      sink.Feature('document')
+                  ]),
+                  target=sink.Feature('summary'))
+
+
+
     sink.register('scientific_papers/arxiv',
                   input=sink.Join([
                       sink.Constant('arxiv'),
