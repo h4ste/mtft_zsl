@@ -1,11 +1,10 @@
 import abc
+import functools
+import logging
 import typing
 
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
-import logging
-# noinspection PyProtectedMember
-from tensorflow_datasets.core.registered import DatasetNotFoundError
 
 __SINK = {}
 
@@ -149,17 +148,114 @@ class Sequence(Mapping):
             raise ValueError('Unsupported key ' + str(type(self._key)) + ' for sink.Sequence')
 
 
+class Task(object):
+    dataset: str
+    split: typing.Union[str, tfds.Split, None]
+
+    data_dir: str = None
+
+    def __init__(self, dataset: str, split: typing.Union[str, tfds.Split, None]):
+        self.dataset = dataset
+        self.split = split
+
+    @classmethod
+    def parse(cls, string: str):
+        """Parses a command-line specified dataset and split string to determine the dataset and optionally the split
+        e.g., "super_glue/copa" -> Task(dataset="super_glue/copa", split=None)
+              "super_glue/copa::train" -> Task(dataset="super_glue/copa", split="train")
+        :param string: dataset and split string,
+        :return: a new Task object
+        """
+        task = string.split("::")
+        if len(task) == 1:
+            dataset = task[0]
+            split = None
+        elif len(task) == 2:
+            dataset = task[0]
+            split = task[1]
+        else:
+            raise ValueError("Received unexpected dataset specification.")
+
+        return Task(dataset, split)
+
+    def _get_split_or_else(self, alternative: tfds.Split):
+        if self.split is not None:
+            return self.split
+        elif Task.split_in_dataset(alternative, self.dataset):
+            return alternative
+        else:
+            logging.warning('%s: dataset %s has no %s split and no alternative split was specified.',
+                            self, self.dataset, alternative)
+            return None
+
+    @staticmethod
+    def _parse_tasks(task_strs: typing.Iterable[str], fallback_split: typing.Optional[tfds.Split] = None):
+        tasks = []
+        for task_str in task_strs:
+            task = Task.parse(task_str)
+
+            if fallback_split:
+                split = task._get_split_or_else(fallback_split)
+                task = Task(dataset=task.dataset, split=split)
+
+            if task.split is None:
+                continue
+
+            tasks.append(task)
+        return tasks
+
+    @staticmethod
+    def parse_train_tasks(task_strs: typing.Iterable[str]):
+        return Task._parse_tasks(task_strs, fallback_split=tfds.Split.TRAIN)
+
+    @staticmethod
+    def parse_validation_tasks(task_strs: typing.Iterable[str]):
+        return Task._parse_tasks(task_strs, fallback_split=tfds.Split.VALIDATION)
+
+    @staticmethod
+    def parse_test_tasks(task_strs: typing.Iterable[str]):
+        return Task._parse_tasks(task_strs, fallback_split=tfds.Split.TEST)
+
+    def __str__(self):
+        return '%s[%s]' % (self.dataset, self.split)
+
+    def __repr__(self):
+        return self.__str__()
+
+    @staticmethod
+    @functools.lru_cache(maxsize=None)
+    def get_or_load_dataset(name: str) -> (tfds.core.DatasetBuilder, tfds.core.DatasetInfo):
+        builder: tfds.core.DatasetBuilder = tfds.builder(name, data_dir=Task.data_dir)
+        builder.download_and_prepare(
+            download_config=tfds.download.DownloadConfig(
+                try_download_gcs=False
+            )
+        )
+        info: tfds.core.DatasetInfo = builder.info
+        return builder, info
+
+    @staticmethod
+    def split_in_dataset(split: tfds.Split, dataset: str):
+        _, info = Task.get_or_load_dataset(dataset)
+        # logging.debug('Looking for %s in %s of %s', split, info.splits, dataset)
+        return split in info.splits
+
+    @classmethod
+    def add_checksum_dir(cls, checksum_dir: str):
+        if checksum_dir:
+            tfds.download.add_checksums_dir(
+                checksum_dir,
+            )
+
+
 def register(dataset_name: str, input: Mapping, target: Mapping):
     try:
-        builder = tfds.builder(dataset_name)
-    except DatasetNotFoundError:
-        logging.warning('Dataset %s was not found, it will not be registered to the kitchen sink.', dataset_name)
-        return
+        _, info = Task.get_or_load_dataset(dataset_name)
+        input.validate(info)
+        target.validate(info)
+    except IOError as ioe:
+        logging.error('Unable to validate dataset %s: %s', dataset_name, ioe)
 
-    info = builder.info
-
-    input.validate(info)
-    target.validate(info)
     logging.info('Registered %s with specification input:"<%s>" & targets: "<%s>"', dataset_name, input, target)
 
     def conversion_fn(elem: tfds.features.FeaturesDict):

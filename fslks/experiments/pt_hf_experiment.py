@@ -92,9 +92,9 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
 
         return model
 
-    def get_forward_params(self, model,
-                           inputs: typing.Mapping[str, np.ndarray],
-                           labels: typing.Optional[np.ndarray] = None) -> typing.Mapping[str, torch.Tensor]:
+    def prepare_forward_inputs(self, model: transformers.PreTrainedModel,
+                               inputs: typing.Mapping[str, np.ndarray],
+                               labels: typing.Optional[np.ndarray] = None) -> typing.Mapping[str, torch.Tensor]:
         # Okay, so, each model in HuggingFace has an associated tokenizer. The tokenizer is supposed to
         # return only the inputs that the associated model wants. Unfortunately, it absolutely does *NOT*
         # do this. Moreover, it doesn't even return outputs in the correct types, expected by the models,
@@ -116,7 +116,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             elif 'lm_labels' in forward_arg_names:
                 params['lm_labels'] = labels
             else:
-                raise ValueError('Forward method of %s did not have argument labels or lm_labels, only: %s' % (
+                raise ValueError('Model %s did not have argument labels or lm_labels, only: %s' % (
                     model, forward_arg_names))
 
         return params
@@ -129,7 +129,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         model.train()
 
         # Run the forward pass
-        loss = model(**self.get_forward_params(model, inputs, labels))[0]
+        loss = model(**self.prepare_forward_inputs(model, inputs, labels))[0]
 
         if self.gradient_accumulation_steps > 1:
             loss = loss / self.gradient_accumulation_steps
@@ -141,6 +141,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             loss.backward()
 
         return loss.item()
+
 
     def train(self,
               model: transformers.PreTrainedModel,
@@ -214,16 +215,16 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                     for step, (inputs, labels, _) in enumerate(validation_data.as_numpy_iterator(), 1):
                         model.eval()
                         # Run the forward pass
-                        running_valid_loss += model(**self.get_forward_params(model, inputs, labels))[0].item()
+                        running_valid_loss += model(**self.prepare_forward_inputs(model, inputs, labels))[0].item()
                         valid_steps += 1
 
             lr = scheduler.get_last_lr()[0]
-            loss_sclar = (tr_loss - logging_loss) / steps_per_epoch
+            loss_scalar = (tr_loss - logging_loss) / steps_per_epoch
             logging_loss = tr_loss
             train_itr.write('Global step: %d, lr: %g, loss: %g, val_loss: %g' % (
                 global_step,
                 lr,
-                loss_sclar,
+                loss_scalar,
                 running_valid_loss / valid_steps if valid_steps > 0 else np.NaN))
 
         train_itr.close()
@@ -240,8 +241,9 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                                           unit="batch", leave=False):
                 with torch.no_grad():
                     model.eval()
-                    forward_params = self.get_forward_params(model, batch_inputs)
-                    batch_outputs = model.generate(**forward_params,
+                    forward_params = self.prepare_forward_inputs(model, batch_inputs)
+                    batch_outputs = model.generate(forward_params['input_ids'],
+                                                   attention_mask=forward_params['attention_mask'],
                                                    do_sample=True,
                                                    max_length=140 + 2,
                                                    min_length=55 + 1,
