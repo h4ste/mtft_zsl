@@ -1,4 +1,5 @@
 from .bioasq import Bioasq
+from .duc import Duc
 from .medlineplus_references import MedlineplusReferences
 from .medlineplus_reviews import MedlineplusReviews
 from .medinfo import Medinfo
