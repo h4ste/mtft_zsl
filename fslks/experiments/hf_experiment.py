@@ -291,16 +291,12 @@ class Experiment(abc.ABC, typing.Generic[Model]):
     def _get_prediction_outputs(self,
                                 model: Model,
                                 task: Task,
-                                eval_batch_size: int,
-                                eval_batches: typing.Optional[int] = None, ):
+                                eval_batch_size: int, ):
         decoder_fn = self.decoder_fn
 
         task_data = self.load_task_data(task.dataset, split=task.split)
-        if not eval_batches:
-            task_data = self.maybe_cache(task, task_data)
+        task_data = self.maybe_cache(task, task_data)
         task_data = task_data.batch(eval_batch_size, drop_remainder=False)
-        if eval_batches:
-            task_data = task_data.take(eval_batches)
 
         logging.info('Evaluating %s', task)
         inputs = task_data.map(lambda inputs_, targets__, sample_weights: inputs_)
@@ -332,8 +328,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
     def predict(self,
                 model: Model,
                 tasks: typing.List[Task],
-                eval_batch_size: int,
-                eval_batches: typing.Optional[int] = None) -> Predictions:
+                eval_batch_size: int) -> Predictions:
         predictions: Predictions = {}
 
         for task in tasks:
@@ -344,6 +339,5 @@ class Experiment(abc.ABC, typing.Generic[Model]):
             predictions[task.dataset][task.split] = functools.partial(self._get_prediction_outputs,
                                                                       model=model,
                                                                       task=task,
-                                                                      eval_batch_size=eval_batch_size,
-                                                                      eval_batches=eval_batches)
+                                                                      eval_batch_size=eval_batch_size)
         return predictions
