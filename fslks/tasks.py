@@ -186,7 +186,7 @@ def register_task_mappings():
                       sink.Constant('summarize:'),
                       sink.Constant('question:'),
                       sink.Feature('question'),
-                      sink.Feature('document')
+                      sink.Sequence('document')
                   ]),
                   target=sink.Feature('summary'))
 
