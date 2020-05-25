@@ -9,9 +9,13 @@ faulthandler.register(signal.SIGUSR1)
 
 import numpy as np
 
+import gorilla
+
 from fslks.experiments import Predictions, Task
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+from tensorflow_datasets.core.utils import gcs_utils
 
 from absl import flags
 from absl import app
@@ -116,13 +120,6 @@ def main(argv):
 
     logging.set_verbosity(logging.DEBUG)
 
-    # Setup tfds parameters
-    Task.data_dir = FLAGS.data_dir
-    Task.add_checksum_dir(FLAGS.checksum_dir)
-
-    # Register all our defined task mappings
-    tasks.register_task_mappings()
-
     experiment: experiments.Experiment
     if FLAGS.implementation == 'tensorflow':
         # configure_tf(FLAGS.use_xla, FLAGS.use_amp)
@@ -141,6 +138,28 @@ def main(argv):
                                               seed=FLAGS.seed)
     else:
         raise NotImplementedError('Unsupported implementation \"%s\"' % FLAGS.implementation)
+
+    patch_settings = gorilla.Settings(allow_hit=True)
+
+    def _patched_gcs_dataset_info_files(dataset_dir):
+        try:
+            original = gorilla.get_original_attribute(gcs_utils, 'gcs_dataset_info_files')
+            return original(dataset_dir)
+        except IOError as ioe:
+            logging.error('Failed to connect to GCS', exc_info=ioe)
+            return None
+
+    patch = gorilla.Patch(gcs_utils, 'gcs_dataset_info_files', _patched_gcs_dataset_info_files, settings=patch_settings)
+    gorilla.apply(patch)
+
+    # Setup tfds parameters
+    Task.data_dir = FLAGS.data_dir
+    Task.add_checksum_dir(FLAGS.checksum_dir)
+
+    # Register all our defined task mappings
+    tasks.register_task_mappings()
+
+
 
     # Load model
     model = experiment.load_model(model_name=FLAGS.init_checkpoint)

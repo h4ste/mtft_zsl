@@ -4,6 +4,7 @@ import logging
 import os
 import typing
 
+import requests
 import gorilla
 import numpy as np
 import tensorflow.compat.v2 as tf
@@ -13,6 +14,7 @@ from tensorflow.python import pywrap_tensorflow
 # For memory leak:
 from tensorflow.python.eager import context as tf_eager_context
 from tensorflow.python.framework import random_seed
+
 
 from fslks import sink
 from fslks.sink import Task

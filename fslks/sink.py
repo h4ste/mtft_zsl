@@ -254,7 +254,7 @@ def register(dataset_name: str, input: Mapping, target: Mapping):
         input.validate(info)
         target.validate(info)
     except IOError as ioe:
-        logging.error('Unable to validate dataset %s: %s', dataset_name, ioe)
+        logging.error('Unable to validate dataset %s', dataset_name, exc_info=ioe)
 
     logging.info('Registered %s with specification input:"<%s>" & targets: "<%s>"', dataset_name, input, target)
 

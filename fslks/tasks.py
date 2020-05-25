@@ -249,3 +249,23 @@ def register_task_mappings():
                       0: sink.Constant('False'),
                       1: sink.Constant('True')
                   }))
+
+    sink.register('tac/2009',
+                  input=sink.Join([
+                      sink.Constant('tac update'),
+                      sink.Constant('question:'),
+                      sink.Feature('topic'),
+                      sink.Constant('summarize:'),
+                      sink.Sequence('articles')
+                  ]),
+                  target=sink.Feature('summary'))
+
+    sink.register('tac/2010',
+                  input=sink.Join([
+                      sink.Constant('tac update'),
+                      sink.Constant('question:'),
+                      sink.Feature('topic'),
+                      sink.Constant('summarize:'),
+                      sink.Sequence('articles')
+                  ]),
+                  target=sink.Feature('summary'))
