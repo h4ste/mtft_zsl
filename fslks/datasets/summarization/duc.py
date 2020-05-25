@@ -102,10 +102,10 @@ class Duc(tfds.core.GeneratorBasedBuilder):
                     # In the 'summaries' value, there are 4 summaries + 4 sets of documents
                     # The 4 summaries were created by 4 different annotators for each topic, and have keys A-J
                     # Documents have already been sorted based on n-gram matches to summary and added to list in preprocessing.
-                    for summary in duc_data[topic_id]['summaries']:
+                    for summary in duc_data[topic_id]['summaries'].values():
                         example_cnt += 1
                         yield example_cnt, {
-                            'article': summary['documents'],
+                            'document': summary['documents'],
                             'summary': summary['summary'],
                             'question': question,
                             }
