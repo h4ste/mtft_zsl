@@ -45,7 +45,7 @@ flags.DEFINE_string('data_dir', None, 'Path to TensorFlow DataSets home (e.g., ~
 flags.DEFINE_string('cache_dir', None, 'Path to save TensorFlow DataSet cache files (e.g., /tmp)')
 flags.DEFINE_string('checksum_dir', '/data/LHC_kitchensink/tensorflow_datasets/url_checksums',
                     help='Path to checksum directory')
-flags.DEFINE_integer('steps_per_epoch', 100, 'Number of steps considered as an epoch')
+flags.DEFINE_integer('steps_per_epoch', 1000, 'Number of steps considered as an epoch')
 flags.DEFINE_enum('implementation', default='tensorflow', enum_values=['tensorflow', 'pytorch'],
                   help='implementation to use for huggingface models')
 flags.DEFINE_enum('evaluation', default='basic', enum_values=['basic', 'nlg'],
