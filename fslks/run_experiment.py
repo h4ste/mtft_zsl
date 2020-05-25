@@ -49,7 +49,7 @@ flags.DEFINE_string('data_dir', None, 'Path to TensorFlow DataSets home (e.g., ~
 flags.DEFINE_string('cache_dir', None, 'Path to save TensorFlow DataSet cache files (e.g., /tmp)')
 flags.DEFINE_string('checksum_dir', '/data/LHC_kitchensink/tensorflow_datasets/url_checksums',
                     help='Path to checksum directory')
-flags.DEFINE_integer('steps_per_epoch', 100, 'Number of steps considered as an epoch')
+flags.DEFINE_integer('steps_per_epoch', 1000, 'Number of steps considered as an epoch')
 flags.DEFINE_enum('implementation', default='tensorflow', enum_values=['tensorflow', 'pytorch'],
                   help='implementation to use for huggingface models')
 flags.DEFINE_enum('evaluation', default='basic', enum_values=['basic', 'nlg'],
@@ -169,6 +169,14 @@ def main(argv):
         training_tasks = Task.parse_train_tasks(FLAGS.training_tasks)
         validation_tasks = Task.parse_validation_tasks(FLAGS.validation_tasks)
 
+        if FLAGS.checkpoint_dir:
+            # Make directories to save best checkpoint and final checkpoint
+            os.makedirs(FLAGS.checkpoint_dir, exist_ok=True)
+            FLAGS.append_flags_into_file(os.path.join(FLAGS.checkpoint_dir, 'flags.cfg'))
+            best_dir = "{0}_best".format(FLAGS.checkpoint_dir)
+            os.makedirs(best_dir, exist_ok=True)
+            FLAGS.append_flags_into_file(os.path.join(best_dir, 'flags.cfg'))
+
         # Train model
         logging.info('Training %s with %s...', FLAGS.init_checkpoint, ' '.join(FLAGS.training_tasks))
         experiment.train(model,
@@ -183,9 +191,8 @@ def main(argv):
                          checkpoint_file=FLAGS.checkpoint_dir)
 
         if FLAGS.checkpoint_dir:
-            os.makedirs(FLAGS.checkpoint_dir, exist_ok=True)
+            # Save final checkpoint
             experiment.save_model(model, FLAGS.checkpoint_dir)
-            FLAGS.append_flags_into_file(os.path.join(FLAGS.checkpoint_dir, 'flags.cfg'))
 
     if FLAGS.do_predict:
         # Evaluate the model
@@ -193,8 +200,7 @@ def main(argv):
         logging.info('Predicting %s with %s...', ' '.join(FLAGS.testing_tasks), FLAGS.init_checkpoint)
         predictions = experiment.predict(model,
                                          tasks=testing_tasks,
-                                         eval_batch_size=FLAGS.eval_batch_size,
-                                         eval_batches=FLAGS.eval_batches)
+                                         eval_batch_size=FLAGS.eval_batch_size)
         save_predictions(predictions, FLAGS.prediction_dir)
 
     if FLAGS.do_test:
@@ -205,8 +211,7 @@ def main(argv):
             logging.warning('--prediction_dir was not specified, generating predictions from scratch')
             predictions = experiment.predict(model,
                                              tasks=testing_tasks,
-                                             eval_batch_size=FLAGS.eval_batch_size,
-                                             eval_batches=FLAGS.eval_batches)
+                                             eval_batch_size=FLAGS.eval_batch_size)
 
         evaluator = evaluation.get_evaluator(FLAGS.evaluation)
         results = evaluator.evaluate(predictions)

@@ -218,6 +218,19 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                         running_valid_loss += model(**self.prepare_forward_inputs(model, inputs, labels))[0].item()
                         valid_steps += 1
 
+                avg_val_loss = running_valid_loss / valid_steps
+                # Save checkpoint if validation loss decreases and checkpoint dir has been provided
+                if checkpoint_file:
+                    if epoch == 1:
+                        best_val_loss = avg_val_loss
+                        logging.info("Saving best model with initial validation loss {0})".format(best_val_loss))
+                        self.save_model(model, "{0}_best".format(checkpoint_file))
+                    else:
+                        if avg_val_loss < best_val_loss:
+                            best_val_loss = avg_val_loss
+                            logging.info("Saving new best model with validation loss {0} (epoch {1})".format(best_val_loss, epoch))
+                            self.save_model(model, "{0}_best".format(checkpoint_file))
+
             lr = scheduler.get_last_lr()[0]
             loss_scalar = (tr_loss - logging_loss) / steps_per_epoch
             logging_loss = tr_loss
