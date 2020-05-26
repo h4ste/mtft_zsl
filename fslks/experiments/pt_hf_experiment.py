@@ -347,7 +347,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                     tasks=tasks,
                     rates=mixing_losses,
                     normalize=False,
-                    temperature=2
+                    temperature=(1. / self.temperature)
                 )
                 print('Epoch {:d}: Updating Mixing Rate: {:s}'.format(
                     epoch,
