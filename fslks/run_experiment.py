@@ -218,7 +218,15 @@ def main(argv):
     if FLAGS.do_predict:
         # Evaluate the model
         testing_tasks = Task.parse_test_tasks(FLAGS.testing_tasks)
+        # Reload model, using best checkpoint if available. 
+        # Otherwise use the existing model.
+        model_dir = "{0}_best".format(FLAGS.checkpoint_dir)
+        if os.path.isdir(model_dir):
+            logging.info("Loading best performing checkpoint: %s" % (model_dir))
+            experiment.load_model(model_name=model_dir)
+
         logging.info('Predicting %s with %s...', ' '.join(FLAGS.testing_tasks), FLAGS.init_checkpoint)
+
         predictions = experiment.predict(model,
                                          tasks=testing_tasks,
                                          eval_batch_size=FLAGS.eval_batch_size)
