@@ -1,5 +1,6 @@
 import logging
 import typing
+from collections import Counter
 
 import numpy as np
 import tensorflow as tf
@@ -12,6 +13,7 @@ from fslks.experiments import Experiment, Task
 
 try:
     from apex import amp
+
     _has_apex = True
 except ImportError:
     amp = None
@@ -65,14 +67,23 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                  max_grad_norm: int = 1,
                  gradient_accumulation_steps: int = 1,
                  use_amp: bool = True,
-                 seed: typing.Optional[int] = None):
+                 seed: typing.Optional[int] = None,
+                 temperature: int = 2,
+                 dynamic_mixing: bool = False,
+                 mix_from_validation: bool = True):
         tf.config.experimental.set_visible_devices([], 'GPU')
-        super().__init__(configuration_name=configuration_name, max_seq_len=max_seq_len, cache_dir=cache_dir, seed=seed)
+        super().__init__(configuration_name=configuration_name,
+                         max_seq_len=max_seq_len,
+                         cache_dir=cache_dir,
+                         seed=seed,
+                         temperature=temperature,
+                         dynamic_mixing=dynamic_mixing,)
         self.warmup_epochs = warmup_epochs
         self.max_grad_norm = max_grad_norm
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.use_amp = use_amp
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.mix_from_validation = mix_from_validation
         if seed:
             torch.manual_seed(seed)
 
@@ -142,6 +153,44 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
 
         return loss.item()
 
+    def get_mixing_rate(self, tasks, rates, normalize=True, temperature=None):
+        temperature = temperature or self.temperature
+        mixing_rates = np.minimum(rates, self.max_examples)
+        if normalize:
+            mixing_rates /= np.sum(mixing_rates)
+        logging.debug('Proportional mixing rates: %s',
+                      '; '.join(
+                          '{:s}: {:0>5.2f}%'.format(t[0], t[1] * 100.)
+                          for t in zip(tasks, mixing_rates)
+                      ))
+        smoothed_rates = mixing_rates ** (1. / temperature)
+        smoothed_rates /= np.sum(smoothed_rates)
+        logging.debug('Smoothed mixing rates: %s',
+                      '; '.join(
+                          '{:s}: {:0>5.2f}%'.format(t[0], t[1] * 100.)
+                          for t in zip(tasks, smoothed_rates)))
+        return smoothed_rates
+
+    def load_train_data(self,
+                        tasks: typing.Sequence[Task],
+                        batch_size: int,
+                        prefetch_size: int):
+
+        logging.debug('Loading training data...')
+        training_data = []
+        dataset_sizes = []
+        for task in tasks:
+            dataset = self.load_task_data(task.dataset, task.split, decode=True, train=True)
+            dataset = self.maybe_cache(task, dataset) \
+                .shuffle(128) \
+                .batch(batch_size, drop_remainder=True) \
+                .repeat() \
+                .prefetch(prefetch_size) \
+                .as_numpy_iterator()
+            training_data.append(dataset)
+            _, info = Task.get_or_load_dataset(task.dataset)
+            dataset_sizes.append(info.splits[task.split].num_examples)
+        return training_data, np.array(dataset_sizes)
 
     def train(self,
               model: transformers.PreTrainedModel,
@@ -158,9 +207,9 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
 
         # Train the model & return its training history
         logging.info('Beginning training...')
-        training_data = self.load_train_data(training_tasks,
-                                             batch_size=batch_size,
-                                             prefetch_size=prefetch_size).as_numpy_iterator()
+        training_data, data_sizes = self.load_train_data(training_tasks,
+                                                         batch_size=batch_size,
+                                                         prefetch_size=prefetch_size)
 
         if validation_tasks:
             logging.info('Preparing kitchen sink with %d validation tasks: %s', len(validation_tasks), validation_tasks)
@@ -188,12 +237,21 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         logging_loss = 0.0
         model.zero_grad()
         train_itr = tqdm.trange(0, num_epochs * steps_per_epoch, desc="Training", unit="batch")
+        tasks = [task.dataset for task in training_tasks]
+        mixing_rates = self.get_mixing_rate(tasks, data_sizes)
+        total_task_steps = Counter({task: np.float32(0.) for task in tasks})
         for epoch in range(1, num_epochs + 1):
             epoch_itr = tqdm.trange(0, steps_per_epoch, desc="Epoch %d" % epoch, leave=False, unit="batch")
+            epoch_task_steps = Counter({task: np.float32(0.) for task in tasks})
+            running_task_losses = {task: np.float32(0.) for task in tasks}
             for step in epoch_itr:
-                inputs, labels, _ = next(training_data)
-                tr_loss += self._train_step(model, inputs, labels, optimizer)
+                inputs, labels, _ = next(np.random.choice(training_data, p=mixing_rates))
+                step_loss = self._train_step(model, inputs, labels, optimizer)
+                tr_loss += step_loss
                 train_itr.update()
+                task = inputs['task'][0].decode('UTF-8')
+                epoch_task_steps[task] += 1
+                running_task_losses[task] += step_loss
 
                 if (step + 1) % self.gradient_accumulation_steps == 0 or (
                         # last step in epoch but step is always smaller than gradient_accumulation_steps
@@ -208,14 +266,56 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                     model.zero_grad()
                     global_step += 1
 
+            total_tasks = sum(epoch_task_steps.values())
+
+            print('Epoch %d: Empirical Mixing Rates: %s' % (
+                epoch,
+                '; '.join('{:s}: {:0>5.2f}%'.format(task, rate * 100. / total_tasks)
+                          for task, rate in epoch_task_steps.items())
+            ))
+
+            print('Epoch %d: Expected Mixing Rates: %s' % (
+                epoch,
+                '; '.join('{:s}: {:0>5.2f}%'.format(task, rate * 100.)
+                          for task, rate in zip(tasks, mixing_rates))
+            ))
+
+            mixing_losses = [loss / epoch_task_steps[task] for task, loss in running_task_losses.items()]
+            print('Epoch %d: Training Losses: %s' % (
+                epoch,
+                '; '.join('{:s}: {:g}'.format(task, loss) for task, loss in zip(tasks, mixing_losses))
+            ))
+
+            if epoch > self.warmup_epochs:
+                total_task_steps += epoch_task_steps
+                exploration_ratios = np.array([total_task_steps.get(task, np.float32(0)) / size
+                                               for task, size in zip(tasks, data_sizes)])
+                print('Epoch %d: Exploration Ratios: %s' % (
+                    epoch,
+                    '; '.join('{:s}: {:0>5.2f}%'.format(task, ratio * 100.)
+                              for task, ratio in zip(tasks, exploration_ratios))
+                ))
+
+                if not self.mix_from_validation:
+                    avg_loss = np.nanmean(mixing_losses)
+                    mixing_losses = [er * loss + (1. - er) * avg_loss
+                                     for er, loss in zip(exploration_ratios, np.nan_to_num(mixing_losses))]
+
             valid_steps = 0
             running_valid_loss = 0.
             if validation_data:
+                epoch_task_steps = Counter({task: np.float32(0.) for task in tasks})
+                running_task_losses = {task: np.float32(0.) for task in tasks}
                 with torch.no_grad():
                     for step, (inputs, labels, _) in enumerate(validation_data.as_numpy_iterator(), 1):
                         model.eval()
                         # Run the forward pass
-                        running_valid_loss += model(**self.prepare_forward_inputs(model, inputs, labels))[0].item()
+                        valid_step_loss = model(**self.prepare_forward_inputs(model, inputs, labels))[0].item()
+                        running_valid_loss += valid_step_loss
+                        valid_task = inputs['task'][0].decode('UTF-8')
+                        if valid_task in tasks:
+                            epoch_task_steps[valid_task] += 1
+                            running_task_losses[valid_task] += valid_step_loss
                         valid_steps += 1
 
                 avg_val_loss = running_valid_loss / valid_steps
@@ -228,8 +328,39 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                     else:
                         if avg_val_loss < best_val_loss:
                             best_val_loss = avg_val_loss
-                            logging.info("Saving new best model with validation loss {0} (epoch {1})".format(best_val_loss, epoch))
+                            logging.info(
+                                "Saving new best model with validation loss {0} (epoch {1})".format(best_val_loss,
+                                                                                                    epoch))
                             self.save_model(model, "{0}_best".format(checkpoint_file))
+
+                print('Epoch {:d}: Validation Losses: {:s}'.format(
+                    epoch,
+                    '; '.join('{:s}: {:g}'.format(task, loss / epoch_task_steps[task])
+                              for task, loss in running_task_losses.items() if loss > 0.)
+                ))
+
+                if self.mix_from_validation:
+                    mixing_losses = [loss / epoch_task_steps[task] for task, loss in running_task_losses.items()]
+
+            if epoch > self.warmup_epochs and self.dynamic_mixing:
+                new_mixing_rates = self.get_mixing_rate(
+                    tasks=tasks,
+                    rates=mixing_losses,
+                    normalize=False,
+                    temperature=2
+                )
+                print('Epoch {:d}: Updating Mixing Rate: {:s}'.format(
+                    epoch,
+                    '; '.join(
+                        '{:s}: {:0>5.2f}%->{:0>5.2f}% (Δ={:0>5.2f})'.format(
+                            task,
+                            old_rate * 100.,
+                            smooth_rate * 100.,
+                            (smooth_rate-old_rate) * 100.)
+                        for task, old_rate, smooth_rate in zip(tasks, mixing_rates, new_mixing_rates))
+                ))
+                mixing_rates = new_mixing_rates
+                logging.debug('Mixing rates (shape=%s; |tasks|=%d): %s', mixing_rates.shape, len(tasks), mixing_rates)
 
             lr = scheduler.get_last_lr()[0]
             loss_scalar = (tr_loss - logging_loss) / steps_per_epoch

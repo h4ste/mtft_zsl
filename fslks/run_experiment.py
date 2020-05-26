@@ -55,6 +55,9 @@ flags.DEFINE_enum('implementation', default='tensorflow', enum_values=['tensorfl
 flags.DEFINE_enum('evaluation', default='basic', enum_values=['basic', 'nlg'],
                   help='method to use for evaluating model performance')
 flags.DEFINE_integer('seed', default=None, help='Random seed used for experiments')
+flags.DEFINE_float('temperature', default=2., help='Temperature used for task mixing')
+flags.DEFINE_boolean('dynamic_mixing', default=False, help='Whether to turn on dynamic task mixing based on validation losses')
+flags.DEFINE_boolean('mix_from_validation', default=True, help='If True, dynamic mixing will use validation losses; otherwise, training losses will be used.')
 
 
 def save_predictions(predictions: Predictions, output_dir: str):
@@ -135,7 +138,10 @@ def main(argv):
                                               max_seq_len=FLAGS.max_seq_len,
                                               use_amp=FLAGS.use_amp,
                                               warmup_epochs=FLAGS.warmup_epochs,
-                                              seed=FLAGS.seed)
+                                              seed=FLAGS.seed,
+                                              temperature=FLAGS.temperature,
+                                              dynamic_mixing=FLAGS.dynamic_mixing,
+                                              mix_from_validation=FLAGS.mix_from_validation)
     else:
         raise NotImplementedError('Unsupported implementation \"%s\"' % FLAGS.implementation)
 
@@ -159,8 +165,6 @@ def main(argv):
     # Register all our defined task mappings
     tasks.register_task_mappings()
 
-
-
     # Load model
     model = experiment.load_model(model_name=FLAGS.init_checkpoint)
 
@@ -168,6 +172,23 @@ def main(argv):
         # Parse dataset and split
         training_tasks = Task.parse_train_tasks(FLAGS.training_tasks)
         validation_tasks = Task.parse_validation_tasks(FLAGS.validation_tasks)
+
+        if FLAGS.dynamic_mixing and FLAGS.mix_from_validation:
+            train_sets = {t.dataset: t for t in training_tasks}
+            valid_sets = {t.dataset: t for t in validation_tasks}
+            if train_sets.keys() != valid_sets.keys():
+                logging.error('Dynamic mixing from validation requites validation data for each training task!')
+            for dataset in train_sets.keys() - valid_sets.keys():
+                train_sets[dataset] = Task(dataset, 'train[:80%]')
+                valid_sets[dataset] = Task(dataset, 'train[-20%:]')
+                logging.warning('Adjusting %s to use 80% for training and 20% for validation', dataset)
+            training_tasks = []
+            validation_tasks = []
+            for dataset in train_sets:
+                training_tasks.append(train_sets[dataset])
+                validation_tasks.append(valid_sets[dataset])
+            for dataset in valid_sets.keys() - train_sets.keys():
+                validation_tasks.append(valid_sets[dataset])
 
         if FLAGS.checkpoint_dir:
             # Make directories to save best checkpoint and final checkpoint

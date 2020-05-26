@@ -4,7 +4,6 @@ import logging
 import os
 import typing
 
-import requests
 import gorilla
 import numpy as np
 import tensorflow.compat.v2 as tf
@@ -14,7 +13,6 @@ from tensorflow.python import pywrap_tensorflow
 # For memory leak:
 from tensorflow.python.eager import context as tf_eager_context
 from tensorflow.python.framework import random_seed
-
 
 from fslks import sink
 from fslks.sink import Task
@@ -58,13 +56,15 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                  cache_dir: typing.Optional[str] = None,
                  seed: typing.Optional[int] = None,
                  max_task_examples: float = 2e21,
-                 task_ratio_temperature: float = 2.):
+                 temperature: float = 2.,
+                 dynamic_mixing: bool = True):
         self.max_seq_len = max_seq_len
         self.cache_dir = cache_dir
 
         # Task mixing constants
         self.max_examples = max_task_examples
-        self.temperature = task_ratio_temperature
+        self.temperature = temperature
+        self.dynamic_mixing = dynamic_mixing
 
         if seed:
             logging.debug('Setting seed to %d', seed)
@@ -184,6 +184,7 @@ class Experiment(abc.ABC, typing.Generic[Model]):
                 'input_ids': input_ids,
                 'attention_mask': attention_mask,
                 'token_type_ids': token_type_ids,
+                'task': dataset,
             }
 
             if self.config.is_encoder_decoder:
@@ -236,19 +237,32 @@ class Experiment(abc.ABC, typing.Generic[Model]):
             _, info = Task.get_or_load_dataset(task.dataset)
             dataset_sizes.append(info.splits[task.split].num_examples)
 
-        logging.debug('Mixing tasks with training sizes: %s', dict(zip(tasks, map('{:,d}'.format, dataset_sizes))))
+        training_tasks = [task.dataset for task in tasks]
+        logging.debug('Mixing tasks with training sizes: %s',
+                      dict(zip(training_tasks, map('{:,d}'.format, dataset_sizes))))
 
         # Dataset mixing if using more than one training dataset
         if len(dataset_sizes) > 1:
             # Take the sum of the size of the datasets, choosing between K and size of dataset n for each term
             # in the summation
-            rates = np.minimum(dataset_sizes, self.max_examples)
-            rates /= np.sum(rates)
-            logging.debug('Proportional task rates: %s', dict(zip(tasks, map('{:5.2f}%'.format, rates * 100.))))
-            smoothed_rates = rates ** (1. / self.temperature)
-            smoothed_rates /= np.sum(smoothed_rates)
-            logging.info('Smoothed task rates: %s', dict(zip(tasks, map('{:5.2f}%'.format, smoothed_rates * 100.))))
-            training_data = tf.data.experimental.sample_from_datasets(training_data, weights=smoothed_rates)
+            self.mixing_counts = tf.Variable(np.minimum(dataset_sizes, self.max_examples), dtype=tf.float32,
+                                             trainable=False)
+            self.mixing_rates = self.mixing_counts / tf.math.reduce_sum(self.mixing_counts)
+            logging.debug('Proportional mixing rates: %s',
+                          '; '.join(
+                              '{:s}: {:0>5.2f}%'.format(t[0], t[1] * 100.)
+                              for t in zip(training_tasks, self.mixing_rates.numpy()))
+                          )
+            smoothed_rates = tf.math.pow(self.mixing_rates, 1. / self.temperature)
+            self.smoothed_mixing_rates = smoothed_rates / tf.math.reduce_sum(smoothed_rates)
+            logging.debug('Smoothed mixing rates: %s',
+                          '; '.join(
+                              '{:s}: {:0>5.2f}%'.format(t[0], t[1] * 100.)
+                              for t in zip(training_tasks, self.smoothed_mixing_rates.numpy()))
+                          )
+            # logging.info('Smoothed task rates: %s', dict(zip(tasks, map('{:5.2f}%'.format, smoothed_rates * 100.))))
+            training_data = tf.data.experimental.sample_from_datasets(training_data,
+                                                                      weights=self.smoothed_mixing_rates)
         else:
             training_data = training_data[0]
 
@@ -265,6 +279,8 @@ class Experiment(abc.ABC, typing.Generic[Model]):
             task_data = self.load_task_data(task.dataset, task.split)
             if not num_batches:
                 task_data = self.maybe_cache(task, task_data)
+            else:
+                task_data = task_data.cache()
             task_data = task_data.batch(batch_size, drop_remainder=True)
             if num_batches:
                 task_data = task_data.take(num_batches).cache()

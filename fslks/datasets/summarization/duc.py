@@ -81,7 +81,7 @@ class Duc(tfds.core.GeneratorBasedBuilder):
             tfds.core.SplitGenerator(
                 name=tfds.Split.TEST,
                 gen_kwargs={
-                    "path": os.path.join(path, "duc_{}_test_collecton.json".format(self.builder_config.name))}),
+                    "path": os.path.join(path, "duc_{}_test_collection.json".format(self.builder_config.name))}),
         ]
 
     def _generate_examples(self, path=None):
