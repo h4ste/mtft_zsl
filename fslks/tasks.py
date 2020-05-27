@@ -190,8 +190,6 @@ def register_task_mappings():
                   ]),
                   target=sink.Feature('summary'))
 
-
-
     sink.register('scientific_papers/arxiv',
                   input=sink.Join([
                       sink.Constant('arxiv'),
@@ -236,7 +234,7 @@ def register_task_mappings():
 
     sink.register('super_glue/copa',
                   input=sink.Join([
-                      sink.Constant('copa'),
+                      sink.Constant('binary copa'),
                       sink.Constant('choice1:'),
                       sink.Feature('choice1'),
                       sink.Constant('choice2:'),
@@ -257,7 +255,7 @@ def register_task_mappings():
     })
     sink.register('evi_conv',
                   input=sink.Join([
-                      sink.Constant('argue evidence'),
+                      sink.Constant('binary argue'),
                       sink.Constant('choice1:'),
                       sink.DictEntry('evidence_1', _eviconv_stance_mapping),
                       sink.DictEntry('evidence_1', sink.Feature('text')),
@@ -266,8 +264,8 @@ def register_task_mappings():
                       sink.DictEntry('evidence_2', sink.Feature('text')),
                   ]),
                   target=sink.LabelSwitch('label', {
-                      0: sink.Constant('False'),
-                      1: sink.Constant('True')
+                      0: sink.Constant('True'),
+                      1: sink.Constant('False')
                   }))
 
     sink.register('tac/2009',
@@ -289,3 +287,64 @@ def register_task_mappings():
                       sink.Sequence('articles')
                   ]),
                   target=sink.Feature('summary'))
+
+    for config in [f'{d:d}.main.EN' for d in (2011, 2012, 2013)] + \
+                  [f'{d:d}.alzheimers.EN' for d in (2012, 2013)]:
+        sink.register(f'qa4mre/{config}',
+                      input=sink.Join([
+                          sink.Constant('qa4mre'),
+                          sink.Feature('topic_name'),
+                          sink.Constant('question:'),
+                          sink.Feature('question_str'),
+                          # Answer_options is a sequence of dictionary features, so we (1) create a Sequence mapping
+                          sink.Sequence(
+                              # ...and (2) indicate that the sequence is a Dictionary named 'answer_options'
+                              sink.DictEntry(
+                                  'answer_options',
+                                  # ...and (3) indicate that we want to convert 'answer' options by prepending "choice:"
+                                  # before each answer string
+                                  sink.Join([
+                                      sink.Constant('choice:'),
+                                      sink.Feature('answer_str')
+                                  ]))
+                          ),
+                          # Document goes last because they are crazy long
+                          sink.Constant('context:'),
+                          sink.Feature('document_str'),
+                      ]),
+                      target=sink.Feature('correct_answer_str'))
+
+    sink.register('mctaco',
+                  input=sink.Join([
+                      sink.Constant('binary mctaco'),
+                      sink.LabelSwitch('category', {
+                          0: sink.Constant('duration'),
+                          1: sink.Constant('ordering'),
+                          2: sink.Constant('when'),
+                          3: sink.Constant('frequency'),
+                          4: sink.Constant('state')
+                      }),
+                      sink.Constant('question:'),
+                      sink.Feature('question'),
+                      sink.Constant('context:'),
+                      sink.Feature('sentence'),
+                      sink.Constant('answer:'),
+                      sink.Feature('answer')
+                  ]),
+                  target=sink.LabelSwitch('label', {
+                      0: sink.Constant('True'),
+                      1: sink.Constant('False')
+                  }))
+
+    sink.register('cosmos_qa',
+                  input=sink.Join([
+                      sink.Constant('cosmos'),
+                      sink.Constant('question:'),
+                      sink.Feature('question'),
+                      sink.Constant('context:'),
+                      sink.Feature('context'),
+                      *[mapping
+                        for d in range(4)
+                        for mapping in [sink.Constant(f'choice{d:d}:'), sink.Feature(f'answer{d:d}')]],
+                  ]),
+                  target=sink.LabelSwitch('label', {d: sink.Feature(f'answer{d:d}') for d in range(4)}))
