@@ -56,8 +56,10 @@ flags.DEFINE_enum('evaluation', default='basic', enum_values=['basic', 'nlg'],
                   help='method to use for evaluating model performance')
 flags.DEFINE_integer('seed', default=None, help='Random seed used for experiments')
 flags.DEFINE_float('temperature', default=2., help='Temperature used for task mixing')
-flags.DEFINE_boolean('dynamic_mixing', default=False, help='Whether to turn on dynamic task mixing based on validation losses')
-flags.DEFINE_boolean('mix_from_validation', default=True, help='If True, dynamic mixing will use validation losses; otherwise, training losses will be used.')
+flags.DEFINE_boolean('dynamic_mixing', default=False,
+                     help='Whether to turn on dynamic task mixing based on validation losses')
+flags.DEFINE_boolean('mix_from_validation', default=True,
+                     help='If True, dynamic mixing will use validation losses; otherwise, training losses will be used.')
 
 
 def save_predictions(predictions: Predictions, output_dir: str):
@@ -181,7 +183,7 @@ def main(argv):
             for dataset in train_sets.keys() - valid_sets.keys():
                 train_sets[dataset] = Task(dataset, 'train[:80%]')
                 valid_sets[dataset] = Task(dataset, 'train[-20%:]')
-                logging.warning('Adjusting %s to use 80% for training and 20% for validation', dataset)
+                logging.warning('Adjusting %s to use 80%% for training and 20%% for validation', dataset)
             training_tasks = []
             validation_tasks = []
             for dataset in train_sets:

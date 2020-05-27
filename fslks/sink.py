@@ -100,15 +100,16 @@ class LabelSwitch(Mapping):
 
 
 class Join(Mapping):
-    def __init__(self, inputs: typing.Iterable[Mapping]):
+    def __init__(self, inputs: typing.Iterable[Mapping], separator=' '):
         self._inputs = inputs
+        self.separator = separator
 
     def validate(self, info: tfds.core.DatasetInfo) -> None:
         [input_.validate(info) for input_ in self._inputs]
 
     def to_tensor(self, elem: tfds.features.FeaturesDict) -> tf.Tensor:
         inputs = [input_.to_tensor(elem) for input_ in self._inputs]
-        return tf.strings.join(inputs, separator=' ')
+        return tf.strings.join(inputs, separator=self.separator)
 
     def __str__(self):
         return ' '.join(str(input_) for input_ in self._inputs)

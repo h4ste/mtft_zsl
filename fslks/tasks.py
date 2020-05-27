@@ -190,8 +190,6 @@ def register_task_mappings():
                   ]),
                   target=sink.Feature('summary'))
 
-
-
     sink.register('scientific_papers/arxiv',
                   input=sink.Join([
                       sink.Constant('arxiv'),
@@ -289,3 +287,24 @@ def register_task_mappings():
                       sink.Sequence('articles')
                   ]),
                   target=sink.Feature('summary'))
+
+    for config in [f'{d:d}.main.EN' for d in (2011, 2012, 2013)] + \
+                  [f'{d:d}.alzheimers.EN' for d in (2012, 2013)]:
+        sink.register(f'qa4mre/{config}',
+                      input=sink.Join([
+                          sink.Constant('qa4mre'),
+                          sink.Feature('topic_name'),
+                          sink.Constant('question:'),
+                          sink.Feature('question_str'),
+                          sink.Sequence(
+                              sink.DictEntry('answer_options',
+                                             sink.Join([
+                                                 sink.Constant('choice:'),
+                                                 sink.Feature('answer_str')
+                                             ]))
+                          ),
+                          sink.Constant('context:'),
+                          sink.Feature('document_str'),
+                      ]),
+                      target=sink.Feature('correct_answer_str')
+                      )
