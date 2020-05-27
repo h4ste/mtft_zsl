@@ -3,6 +3,7 @@ import csv
 import os
 import faulthandler
 import signal
+from typing import Dict
 
 faulthandler.enable()
 faulthandler.register(signal.SIGUSR1)
@@ -176,14 +177,18 @@ def main(argv):
         validation_tasks = Task.parse_validation_tasks(FLAGS.validation_tasks)
 
         if FLAGS.dynamic_mixing and FLAGS.mix_from_validation:
-            train_sets = {t.dataset: t for t in training_tasks}
-            valid_sets = {t.dataset: t for t in validation_tasks}
+            train_sets: Dict[str, Task] = {t.dataset: t for t in training_tasks}
+            valid_sets: Dict[str, Task] = {t.dataset: t for t in validation_tasks}
             if train_sets.keys() != valid_sets.keys():
                 logging.error('Dynamic mixing from validation requites validation data for each training task!')
             for dataset in train_sets.keys() - valid_sets.keys():
-                train_sets[dataset] = Task(dataset, 'train[:80%]')
-                valid_sets[dataset] = Task(dataset, 'train[-20%:]')
-                logging.warning('Adjusting %s to use 80%% for training and 20%% for validation', dataset)
+                if Task.split_in_dataset("validation", dataset):
+                    valid_sets[dataset] = Task(dataset, 'validation')
+                    logging.warning('Adding %s to validation tasks', dataset)
+                else:
+                    train_sets[dataset] = Task(dataset, 'train[:80%]')
+                    valid_sets[dataset] = Task(dataset, 'train[-20%:]')
+                    logging.warning('Adjusting %s to use 80%% for training and 20%% for validation', dataset)
             training_tasks = []
             validation_tasks = []
             for dataset in train_sets:

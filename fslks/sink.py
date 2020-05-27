@@ -236,7 +236,7 @@ class Task(object):
         return builder, info
 
     @staticmethod
-    def split_in_dataset(split: tfds.Split, dataset: str):
+    def split_in_dataset(split: typing.Union[str, tfds.Split], dataset: str):
         _, info = Task.get_or_load_dataset(dataset)
         # logging.debug('Looking for %s in %s of %s', split, info.splits, dataset)
         return split in info.splits
