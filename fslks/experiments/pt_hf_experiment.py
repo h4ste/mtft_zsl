@@ -92,11 +92,11 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
         logging.info('Loading pre-trained PT model from %s', model_name)
 
         model: transformers.PreTrainedModel
-        if model_name.startswith('t5'):
+        if 't5' in model_name:
             # HuggingFace named T5's sequence generator "ConditionalGeneration" rather than "LanguageModeling"
             # like the others, so we need to load it separately.
             model = transformers.T5ForConditionalGeneration.from_pretrained(model_name, config=self.config)
-        elif model_name.startswith('bart'):
+        elif 'bart' in model_name:
             model = transformers.BartForConditionalGeneration.from_pretrained(model_name, config=self.config)
         else:
             model = transformers.AutoModelWithLMHead.from_pretrained(model_name, config=self.config)

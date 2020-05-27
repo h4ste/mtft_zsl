@@ -296,13 +296,19 @@ def register_task_mappings():
                           sink.Feature('topic_name'),
                           sink.Constant('question:'),
                           sink.Feature('question_str'),
+                          # Answer_options is a sequence of dictionary features, so we (1) create a Sequence mapping
                           sink.Sequence(
-                              sink.DictEntry('answer_options',
-                                             sink.Join([
-                                                 sink.Constant('choice:'),
-                                                 sink.Feature('answer_str')
-                                             ]))
+                              # ...and (2) indicate that the sequence is a Dictionary named 'answer_options'
+                              sink.DictEntry(
+                                  'answer_options',
+                                  # ...and (3) indicate that we want to convert 'answer' options by prepending "choice:"
+                                  # before each answer string
+                                  sink.Join([
+                                      sink.Constant('choice:'),
+                                      sink.Feature('answer_str')
+                                  ]))
                           ),
+                          # Document goes last because they are crazy long
                           sink.Constant('context:'),
                           sink.Feature('document_str'),
                       ]),
