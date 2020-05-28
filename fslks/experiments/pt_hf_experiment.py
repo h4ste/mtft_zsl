@@ -68,16 +68,18 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                  gradient_accumulation_steps: int = 1,
                  use_amp: bool = True,
                  seed: typing.Optional[int] = None,
-                 temperature: int = 2,
+                 temperature: float = 2.,
                  dynamic_mixing: bool = False,
-                 mix_from_validation: bool = True):
+                 mix_from_validation: bool = True,
+                 clip_mixing_size: float = 2e19):
         tf.config.experimental.set_visible_devices([], 'GPU')
         super().__init__(configuration_name=configuration_name,
                          max_seq_len=max_seq_len,
                          cache_dir=cache_dir,
                          seed=seed,
                          temperature=temperature,
-                         dynamic_mixing=dynamic_mixing,)
+                         dynamic_mixing=dynamic_mixing,
+                         max_task_examples=clip_mixing_size)
         self.warmup_epochs = warmup_epochs
         self.max_grad_norm = max_grad_norm
         self.gradient_accumulation_steps = gradient_accumulation_steps
@@ -372,6 +374,11 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                 lr,
                 loss_scalar,
                 running_valid_loss / valid_steps if valid_steps > 0 else np.NaN))
+
+            if not np.isfinite(loss_scalar):
+                logging.info('Loss was NaN, ending training after %d epochs.', epoch)
+                train_itr.close()
+                return
 
         train_itr.close()
 

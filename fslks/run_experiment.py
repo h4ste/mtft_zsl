@@ -61,6 +61,7 @@ flags.DEFINE_boolean('dynamic_mixing', default=False,
                      help='Whether to turn on dynamic task mixing based on validation losses')
 flags.DEFINE_boolean('mix_from_validation', default=True,
                      help='If True, dynamic mixing will use validation losses; otherwise, training losses will be used.')
+flags.DEFINE_float('clip_mixing_size', default=2e14, help='Maximum size to clip datasets for proprtional mixing')
 
 
 def save_predictions(predictions: Predictions, output_dir: str):
@@ -144,7 +145,8 @@ def main(argv):
                                               seed=FLAGS.seed,
                                               temperature=FLAGS.temperature,
                                               dynamic_mixing=FLAGS.dynamic_mixing,
-                                              mix_from_validation=FLAGS.mix_from_validation)
+                                              mix_from_validation=FLAGS.mix_from_validation,
+                                              clip_mixing_size=FLAGS.clip_mixing_size)
     else:
         raise NotImplementedError('Unsupported implementation \"%s\"' % FLAGS.implementation)
 
