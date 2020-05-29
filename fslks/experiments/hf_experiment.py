@@ -327,13 +327,13 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         max_tokens = np.max(target_lens)
         min_length = int(np.floor(min_tokens / 10) * 10)
         max_length = int(np.ceil(max_tokens / 10) * 10)
-        logging.debug('Generating with minimum length %d (from %d) and maximum length %d (from %d)',
+        logging.debug('Targets had minimum length %d (from %d) and maximum length %d (from %d)',
                       min_length, min_tokens, max_length, max_tokens)
 
         logging.info('Evaluating %s', task)
         inputs = task_data.map(lambda inputs_, targets__, sample_weights: inputs_)
 
-        outputs = self.predict_task_split(model, inputs, task, min_length=min_length, max_length=max_length)
+        outputs = self.predict_task_split(model, inputs, task)
         if not outputs:
             logging.warning('Task %s has no labels for split %s, so it will not be evaluated.',
                             task.dataset, task.split)

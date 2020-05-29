@@ -66,26 +66,39 @@ class NlgEvaluator(Evaluator):
         for task, task_predictions in predictions.items():
             for split, split_predictions_fn in task_predictions.items():
                 split_predictions = split_predictions_fn()
+                prompts = split_predictions['prompts']
                 targets = split_predictions['targets']
-                predictions = split_predictions['predictions']
+                predictions_ = split_predictions['predictions']
 
-                for idx, (target_, prediction_) in enumerate(zip(targets, predictions)):
-                    assert len(target_) > 0, "Targets were empty for %s[%s] #%d" % (task, split, idx)
-                    if len(prediction_) == 0:
+                prompt_targets = {}
+                prompt_predictions = {}
+                for prompt_, prediction_, target_ in zip(prompts, predictions_, targets):
+                    if prompt_ not in prompt_targets:
+                        assert prompt_ not in prompt_predictions
+                        prompt_targets[prompt_] = []
+                        prompt_predictions[prompt_] = prediction_.strip()
+                    prompt_targets[prompt_].append(target_.strip())
+
+                references = []
+                hypotheses = []
+                for idx, prompt in enumerate(prompt_predictions.keys()):
+                    target = prompt_targets[prompt]
+                    assert len(target) > 0, "Targets were empty for %s[%s] #%d" % (task, split, idx)
+                    prediction = prompt_predictions[prompt]
+                    if len(prediction) == 0:
                         logging.warning("Predictions were empty for %s[%s] #%d, setting predictions to [_UNK]",
                                         task, split, idx)
-                        predictions[idx] = EMPTY_PREDICTION
+                        prediction = EMPTY_PREDICTION
+                    references.append(target)
+                    hypotheses.append(prediction)
+                    # logging.info('References: %s', target)
+                    # logging.info('Hypothesis: %s', prediction)
+                    # logging.info('Individual metrics: %s', self.nlg.compute_individual_metrics(target, prediction))
 
-                # logging.info('%s[%s]: Targets shape: %s; Targets[0]: %s',
-                #              task, split, np.asarray(targets).shape, targets[0])
-                # logging.info('%s[%s]: Predictions shape: %s; Predictions[0]: %s',
-                #              task, split, np.asarray(predictions).shape, predictions[0])
-                # 
-                # for ref, pred in zip(targets, predictions):
-                #     print(self.nlg.compute_individual_metrics([ref], pred))
-                #     break
+                logging.info('Len(references) = %d; Len(hypotheses) = %d', len(references), len(hypotheses))
 
-                metrics = self.nlg.compute_metrics([targets], predictions)
+
+                metrics = self.nlg.compute_metrics(list(zip(*references)), hypotheses)
                 results.append([task, split,
                                 metrics['Bleu_1'] * 100.,
                                 metrics['Bleu_2'] * 100.,

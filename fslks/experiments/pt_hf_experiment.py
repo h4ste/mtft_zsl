@@ -33,6 +33,16 @@ INPUT_DTYPES = {
     'head_mask': torch.float32
 }
 
+GENERATION_MAX_LENGTHS = {
+    'duc/2007': 300,
+    'duc/2004': 40,
+}
+
+GENERATION_MIN_LENGTHS = {
+    'duc/2007': 140,
+    'duc/2004': 5,
+}
+
 
 def get_optimizer(model: torch.nn.Module,
                   num_training_steps: int,
@@ -388,6 +398,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                            task: Task,
                            max_length: int = 140,
                            min_length: int = 55) -> typing.Sequence[typing.Sequence[int]]:
+
         try:
             outputs = []
             model.to(self.device)
@@ -399,9 +410,9 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                     forward_params = self.prepare_forward_inputs(model, batch_inputs)
                     batch_outputs = model.generate(forward_params['input_ids'],
                                                    attention_mask=forward_params['attention_mask'],
-                                                   do_sample=True,
-                                                   max_length=max_length + 2,
-                                                   min_length=min_length + 1,
+                                                   do_sample=False,
+                                                   max_length=GENERATION_MAX_LENGTHS.get(task.dataset, max_length) + 2,
+                                                   min_length=GENERATION_MIN_LENGTHS.get(task.dataset, min_length) + 1,
                                                    num_beams=4,
                                                    length_penalty=2.,
                                                    no_repeat_ngram_size=3,
