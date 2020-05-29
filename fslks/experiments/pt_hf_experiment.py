@@ -157,14 +157,14 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
 
     def get_mixing_rate(self, tasks, rates, normalize=True, temperature=None):
         temperature = temperature or self.temperature
-        mixing_rates = np.minimum(rates, self.max_examples)
+        mixing_rates = np.maximum(np.minimum(rates, self.max_examples), 1e-8)
         if normalize:
             mixing_rates /= np.sum(mixing_rates)
-        logging.debug('Proportional mixing rates: %s',
-                      '; '.join(
-                          '{:s}: {:0>5.2f}%'.format(t[0], t[1] * 100.)
-                          for t in zip(tasks, mixing_rates)
-                      ))
+            logging.debug('Proportional mixing rates: %s',
+                          '; '.join(
+                              '{:s}: {:0>5.2f}%'.format(t[0], t[1] * 100.)
+                              for t in zip(tasks, mixing_rates)
+                          ))
         smoothed_rates = mixing_rates ** (1. / temperature)
         smoothed_rates /= np.sum(smoothed_rates)
         logging.debug('Smoothed mixing rates: %s',
@@ -306,7 +306,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             valid_steps = 0
             running_valid_loss = 0.
             if validation_data:
-                epoch_task_steps = Counter({task: np.float32(0.) for task in tasks})
+                epoch_task_steps = {task: np.float32(0.) for task in tasks}
                 running_task_losses = {task: np.float32(0.) for task in tasks}
                 with torch.no_grad():
                     for step, (inputs, labels, _) in enumerate(validation_data.as_numpy_iterator(), 1):
@@ -338,7 +338,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                 print('Epoch {:d}: Validation Losses: {:s}'.format(
                     epoch,
                     '; '.join('{:s}: {:g}'.format(task, loss / epoch_task_steps[task])
-                              for task, loss in running_task_losses.items() if loss > 0.)
+                              for task, loss in running_task_losses.items())
                 ))
 
                 if self.mix_from_validation:
@@ -383,7 +383,9 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
     def predict_task_split(self,
                            model: transformers.PreTrainedModel,
                            inputs: tf.data.Dataset,
-                           task: Task) -> typing.Sequence[typing.Sequence[int]]:
+                           task: Task,
+                           max_length: int = 140,
+                           min_length: int = 55) -> typing.Sequence[typing.Sequence[int]]:
         try:
             outputs = []
             model.to(self.device)
@@ -396,8 +398,8 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
                     batch_outputs = model.generate(forward_params['input_ids'],
                                                    attention_mask=forward_params['attention_mask'],
                                                    do_sample=True,
-                                                   max_length=140 + 2,
-                                                   min_length=55 + 1,
+                                                   max_length=max_length + 2,
+                                                   min_length=min_length + 1,
                                                    num_beams=4,
                                                    length_penalty=2.,
                                                    no_repeat_ngram_size=3,

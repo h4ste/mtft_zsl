@@ -94,7 +94,7 @@ class NlgEvaluator(Evaluator):
                                 metrics['ROUGE_L'] * 100.,
                                 metrics['METEOR'] * 100.,
                                 metrics['CIDEr'] * 100.,
-                                metrics['SkipThoughtCS'] * 100.,
+                                # metrics['SkipThoughtCS'] * 100.,
                                 metrics['EmbeddingAverageCosineSimilarity'] * 100.,
                                 metrics['VectorExtremaCosineSimilarity'] * 100.,
                                 metrics['GreedyMatchingScore'] * 100.])
@@ -119,7 +119,7 @@ def get_evaluator(evaluator: str) -> Evaluator:
         evaluator = BasicEvaluator()
     elif evaluator == 'nlg':
         nlg_eval = importlib.import_module('nlgeval')
-        evaluator = NlgEvaluator(nlg=nlg_eval.NLGEval())
+        evaluator = NlgEvaluator(nlg=nlg_eval.NLGEval(no_skipthoughts=True))
     else:
         raise NotImplementedError('Unsupported evaluator \"' + evaluator + "\"")
     return evaluator

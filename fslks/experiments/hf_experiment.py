@@ -303,31 +303,41 @@ class Experiment(abc.ABC, typing.Generic[Model]):
         pass
 
     @abc.abstractmethod
-    def predict_task_split(self, model, data: tf.data.Dataset, task: Task) -> typing.Sequence[typing.Sequence[int]]:
+    def predict_task_split(self, model, data: tf.data.Dataset, task: Task, min_length: int, max_length: int) -> typing.Sequence[typing.Sequence[int]]:
         pass
 
     def _get_prediction_outputs(self,
                                 model: Model,
                                 task: Task,
                                 eval_batch_size: int, ):
+        
         decoder_fn = self.decoder_fn
 
         task_data = self.load_task_data(task.dataset, split=task.split)
         task_data = self.maybe_cache(task, task_data)
         task_data = task_data.batch(eval_batch_size, drop_remainder=False)
 
+        targets = task_data.map(lambda inputs_, targets__, sample_weights: targets__).as_numpy_iterator()
+        targets = np.concatenate(list(targets), axis=0)
+        targets = np.squeeze(targets)
+
+        target_tokens = [decoder_fn(targets_) for targets_ in targets]
+        target_lens = [len(tokens.split()) for tokens in target_tokens]
+        min_tokens = np.min(target_lens)
+        max_tokens = np.max(target_lens)
+        min_length = int(np.floor(min_tokens / 10) * 10)
+        max_length = int(np.ceil(max_tokens / 10) * 10)
+        logging.debug('Generating with minimum length %d (from %d) and maximum length %d (from %d)',
+                      min_length, min_tokens, max_length, max_tokens)
+
         logging.info('Evaluating %s', task)
         inputs = task_data.map(lambda inputs_, targets__, sample_weights: inputs_)
 
-        outputs = self.predict_task_split(model, inputs, task)
+        outputs = self.predict_task_split(model, inputs, task, min_length=min_length, max_length=max_length)
         if not outputs:
             logging.warning('Task %s has no labels for split %s, so it will not be evaluated.',
                             task.dataset, task.split)
             return None
-
-        targets = task_data.map(lambda inputs_, targets__, sample_weights: targets__).as_numpy_iterator()
-        targets = np.concatenate(list(targets), axis=0)
-        targets = np.squeeze(targets)
 
         input_ids = [ids for inputs_ in inputs.as_numpy_iterator() for ids in inputs_['input_ids']]
         for i, (inputs_, outputs_, targets_) in enumerate(zip(input_ids, outputs, targets), start=1):

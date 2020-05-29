@@ -127,28 +127,32 @@ def main(argv):
 
     logging.set_verbosity(logging.DEBUG)
 
-    experiment: experiments.Experiment
-    if FLAGS.implementation == 'tensorflow':
-        # configure_tf(FLAGS.use_xla, FLAGS.use_amp)
-        experiment = experiments.TFExperiment(cache_dir=FLAGS.cache_dir,
-                                              configuration_name=FLAGS.init_checkpoint,
-                                              max_seq_len=FLAGS.max_seq_len,
-                                              use_xla=FLAGS.use_xla,
-                                              use_amp=FLAGS.use_amp,
-                                              seed=FLAGS.seed)
-    elif FLAGS.implementation == 'pytorch':
-        experiment = experiments.PTExperiment(cache_dir=FLAGS.cache_dir,
-                                              configuration_name=FLAGS.init_checkpoint,
-                                              max_seq_len=FLAGS.max_seq_len,
-                                              use_amp=FLAGS.use_amp,
-                                              warmup_epochs=FLAGS.warmup_epochs,
-                                              seed=FLAGS.seed,
-                                              temperature=FLAGS.temperature,
-                                              dynamic_mixing=FLAGS.dynamic_mixing,
-                                              mix_from_validation=FLAGS.mix_from_validation,
-                                              clip_mixing_size=FLAGS.clip_mixing_size)
-    else:
-        raise NotImplementedError('Unsupported implementation \"%s\"' % FLAGS.implementation)
+    if FLAGS.do_train or FLAGS.do_predict or (FLAGS.do_test and not FLAGS.prediction_dir):
+        experiment: experiments.Experiment
+        if FLAGS.implementation == 'tensorflow':
+            # configure_tf(FLAGS.use_xla, FLAGS.use_amp)
+            experiment = experiments.TFExperiment(cache_dir=FLAGS.cache_dir,
+                                                  configuration_name=FLAGS.init_checkpoint,
+                                                  max_seq_len=FLAGS.max_seq_len,
+                                                  use_xla=FLAGS.use_xla,
+                                                  use_amp=FLAGS.use_amp,
+                                                  seed=FLAGS.seed)
+        elif FLAGS.implementation == 'pytorch':
+            experiment = experiments.PTExperiment(cache_dir=FLAGS.cache_dir,
+                                                  configuration_name=FLAGS.init_checkpoint,
+                                                  max_seq_len=FLAGS.max_seq_len,
+                                                  use_amp=FLAGS.use_amp,
+                                                  warmup_epochs=FLAGS.warmup_epochs,
+                                                  seed=FLAGS.seed,
+                                                  temperature=FLAGS.temperature,
+                                                  dynamic_mixing=FLAGS.dynamic_mixing,
+                                                  mix_from_validation=FLAGS.mix_from_validation,
+                                                  clip_mixing_size=FLAGS.clip_mixing_size)
+        else:
+            raise NotImplementedError('Unsupported implementation \"%s\"' % FLAGS.implementation)
+
+        # Load model
+        model = experiment.load_model(model_name=FLAGS.init_checkpoint)
 
     patch_settings = gorilla.Settings(allow_hit=True)
 
@@ -170,9 +174,6 @@ def main(argv):
     # Register all our defined task mappings
     tasks.register_task_mappings()
 
-    # Load model
-    model = experiment.load_model(model_name=FLAGS.init_checkpoint)
-
     if FLAGS.do_train:
         # Parse dataset and split
         training_tasks = Task.parse_train_tasks(FLAGS.training_tasks)
@@ -188,8 +189,8 @@ def main(argv):
                     valid_sets[dataset] = Task(dataset, 'validation')
                     logging.warning('Adding %s to validation tasks', dataset)
                 else:
-                    train_sets[dataset] = Task(dataset, 'train[:80%]')
-                    valid_sets[dataset] = Task(dataset, 'train[-20%:]')
+                    train_sets[dataset] = Task(dataset, 'train[:70%]')
+                    valid_sets[dataset] = Task(dataset, 'train[-30%:]')
                     logging.warning('Adjusting %s to use 80%% for training and 20%% for validation', dataset)
             training_tasks = []
             validation_tasks = []
@@ -227,7 +228,7 @@ def main(argv):
     if FLAGS.do_predict:
         # Evaluate the model
         testing_tasks = Task.parse_test_tasks(FLAGS.testing_tasks)
-        # Reload model, using best checkpoint if available. 
+        # Reload model, using best checkpoint if available.
         # Otherwise use the existing model.
         model_dir = "{0}_best".format(FLAGS.checkpoint_dir)
         if os.path.isdir(model_dir):
