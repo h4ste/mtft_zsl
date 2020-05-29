@@ -99,6 +99,8 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             # like the others, so we need to load it separately.
             model = transformers.T5ForConditionalGeneration.from_pretrained(model_name, config=self.config)
         elif 'bart' in model_name:
+            # Fix for BART config
+            self.config.update({"output_past": True})
             model = transformers.BartForConditionalGeneration.from_pretrained(model_name, config=self.config)
         else:
             model = transformers.AutoModelWithLMHead.from_pretrained(model_name, config=self.config)
