@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 
 from fslks.experiments import Predictions
@@ -16,13 +18,13 @@ EMPTY_PREDICTION = '_UNK'
 class Evaluator(abc.ABC):
 
     @abc.abstractmethod
-    def evaluate(self, predictions: Predictions) -> str:
+    def evaluate(self, predictions: Predictions, limit: int) -> str:
         pass
 
 
 class BasicEvaluator(Evaluator):
 
-    def evaluate(self, predictions: Predictions) -> str:
+    def evaluate(self, predictions: Predictions, limit: int) -> str:
         headers = ['Task', 'Split', 'ROUGE-1', 'ROUGE-2', 'ROUGE-L', 'BLEU-4']
         results = []
 
@@ -57,7 +59,7 @@ class NlgEvaluator(Evaluator):
     def __init__(self, nlg):
         self.nlg = nlg
 
-    def evaluate(self, predictions: Predictions) -> str:
+    def evaluate(self, predictions: Predictions, limit: int = sys.maxsize) -> str:
         headers = ['Task', 'Split',
                    'BLEU-1', 'BLEU-2', 'BLEU-3', 'BLEU-4',
                    'ROUGE-L', 'METEOR', 'CIDEr', 'STCS', 'EACS', 'VECS', 'GMS']
@@ -73,6 +75,8 @@ class NlgEvaluator(Evaluator):
                 prompt_targets = {}
                 prompt_predictions = {}
                 for prompt_, prediction_, target_ in zip(prompts, predictions_, targets):
+                    if task.startswith('duc/2007') or task.startswith('tac'):
+                        prompt_ = prompt_.split('summarize:')[0].strip()
                     if prompt_ not in prompt_targets:
                         assert prompt_ not in prompt_predictions
                         prompt_targets[prompt_] = []
@@ -91,12 +95,13 @@ class NlgEvaluator(Evaluator):
                         prediction = EMPTY_PREDICTION
                     references.append(target)
                     hypotheses.append(prediction)
+                    if idx > limit:
+                        break
                     # logging.info('References: %s', target)
                     # logging.info('Hypothesis: %s', prediction)
                     # logging.info('Individual metrics: %s', self.nlg.compute_individual_metrics(target, prediction))
 
                 logging.info('Len(references) = %d; Len(hypotheses) = %d', len(references), len(hypotheses))
-
 
                 metrics = self.nlg.compute_metrics(list(zip(*references)), hypotheses)
                 results.append([task, split,

@@ -3,6 +3,7 @@ import csv
 import os
 import faulthandler
 import signal
+import sys
 from typing import Dict
 
 faulthandler.enable()
@@ -62,6 +63,7 @@ flags.DEFINE_boolean('dynamic_mixing', default=False,
 flags.DEFINE_boolean('mix_from_validation', default=True,
                      help='If True, dynamic mixing will use validation losses; otherwise, training losses will be used.')
 flags.DEFINE_float('clip_mixing_size', default=2e14, help='Maximum size to clip datasets for proprtional mixing')
+flags.DEFINE_integer('test_limit', default=sys.maxsize, help='Maximum number of predictions to evaluate per task')
 
 
 def save_predictions(predictions: Predictions, output_dir: str):
@@ -253,7 +255,7 @@ def main(argv):
                                              eval_batch_size=FLAGS.eval_batch_size)
 
         evaluator = evaluation.get_evaluator(FLAGS.evaluation)
-        results = evaluator.evaluate(predictions)
+        results = evaluator.evaluate(predictions, FLAGS.test_limit)
         print('Results:')
         print(results)
 
