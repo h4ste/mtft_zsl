@@ -89,7 +89,7 @@ Note: `--init_checkpoint` can be the name of any hugging face model, or the path
 # Evaluation Tasks
 | Name in Paper | Dataset in TFDS |
 | ------------- | --------------- |
-| MEDIQA | `chiqa/section2answer_single_abstractive` |
+| MEDIQA | `chiqa/section2answer_single_extractive` |
 | TAC 2009 | `tac/2009` |
 | TAC 2010 | `tac/2010` |
 | DUC 2004 | `duc/2004` |
