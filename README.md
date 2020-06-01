@@ -11,7 +11,6 @@ export CHECKPOINT_DIR = <path to save model checkpoints>
 export PREDICTION_DIR = <path to save predictions>
 python -m fslks.run_experiment \
                 --training_tasks=\"medinfo bioasq/single_doc bioasq/multi_doc pubmed_summ medlineplus_references super_glue/copa scientific_papers/arxiv scientific_papers/pubmed cochrane_summ cnn_dailymail ebm/answer ebm/justify squad movie_rationales evi_conv cosmos_qa::validation mctaco qa4mre/2011.main.EN qa4mre/2012.main.EN qa4mre/2013.main.EN qa4mre/2012.alzheimers.EN qa4mre/2013.alzheimers.EN\" \
-                --validation_tasks=\"mctaco::test\" \
                 --testing_tasks=\"chiqa/section2answer_single_extractive duc/2004 duc/2007 tac/2009 tac/2010\" \
                 --do_train=True \
                 --checkpoint_dir=$CHECKPOINT_DIR \
