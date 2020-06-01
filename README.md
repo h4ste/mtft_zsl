@@ -1,7 +1,9 @@
 # Zero-shot Learning (ZSL) for consumer health answer summarization
 
 To install related dependencies:
+```bash
 pip install -r requirements.txt
+```
 
 To train the model:
 ```bash
