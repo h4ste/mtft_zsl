@@ -12,11 +12,11 @@ import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
 
 
-_DESCRIPTION = """TBD."""
+_DESCRIPTION = """Multi-document summarization datasets from TAC 2009 and 2010"""
 
-_CITATION = """This work is 100% plagiarized"""
+_CITATION = """https://tac.nist.gov/2009/Summarization/ and https://tac.nist.gov//2010/"""
 
-_TAC_DOWNLOAD_INSTRUCTIONS = """Temp until upload"""
+_TAC_DOWNLOAD_INSTRUCTIONS = """Contact NIST to acquire TAC 2009 and 2010 data"""
 
 _ACQUAINT_HEADER = """<?xml version="1.0" encoding="ISO-8859-1" standalone="yes" ?>
 <!DOCTYPE DOC [

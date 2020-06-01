@@ -9,7 +9,7 @@ import tensorflow_datasets.public_api as tfds
 
 _DESCRIPTION = """DUC data for single and multi-document summarization""" 
 
-_CITATION = """DUC 2004 and 2007"""
+_CITATION = """https://duc.nist.gov/duc2004/tasks.html and https://duc.nist.gov/duc2007/tasks.html"""
 
 _DUC_DOWNLOAD_INSTRUCTIONS = """Contact NIST to acquire data from prior DUC tasks""" 
 

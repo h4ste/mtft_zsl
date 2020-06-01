@@ -11,9 +11,10 @@ _DESCRIPTION = """The Cochrane review articles and plain language summarization 
 for single document summarization.
 """
 
-_CITATION ="""Nothing to cite because I stole the data from Wiley publishing"""
+_CITATION ="""https://www.cochranelibrary.com/cdsr/reviews"""
 
-_COCHRANE_DOWNLOAD_INSTRUCTIONS = """Be very sneaky"""
+_COCHRANE_DOWNLOAD_INSTRUCTIONS = """Export the citations available at https://www.cochranelibrary.com/cdsr/reviews
+and use the provided urls to collect the body of the text and the plain-language summary"""
 
 
 class CochraneSumm(tfds.core.GeneratorBasedBuilder):
