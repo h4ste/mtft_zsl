@@ -59,3 +59,40 @@ python -m fslks.run_experiment \
 
 Note: `--init_checkpoint` can be the name of any hugging face model, or the path to any saved checkpoint created by `--do_train=True`
 
+
+## Fine-tuning Tasks
+| Task in Paper | Task Name in TFDS |
+| ------------- | ----------------- |
+| QA4MRE 2013 Alz. | `qa4mre/2013.alzheimers.EN` |
+| QA4MRE 2012 Alz. | `qa4mre/2012.alzheimers.EN` |
+| QA4MRE 2013 Main | `qa4mre/2013.main.EN` |
+| QA4MRE 2012 Main | `qa4mre/2012.main.EN` |
+| QA4MRE 2011 Main | `qa4mre/2011.main.EN` |
+| MC-TACO | `mctaco` |
+| Cosmos QA | `cosmos_qa` |
+| IBM Evidence | `evi_conv` |
+| Movie Rationales | `movie_rationales`
+| SQuAD | `squad` |
+| EBM Justifications | `ebm/justify` |
+| EBM Answers | `ebm/answer` |
+| CNN/DailyMail | `cnn_dailymail` |
+| Cochrane | `cochrane_summ` |
+| PubMed | `scientific_papers/pubmed` |
+| ArXiv | `scientific_papers/arxiv` |
+| CoPA | `super_glue/copa` |
+| MedlinePlus | `medlineplus_references` |
+| PubMed PubSum | `pubmed_summ` |
+| BioASQ (multi-doc) | `bioasq/multi_doc` |
+| BioASQ (single-doc) | `bioasq/single_doc` |
+| CQaD-S | `medinfo` |
+
+# Evaluation Tasks
+| Name in Paper | Dataset in TFDS |
+| ------------- | --------------- |
+| MEDIQA | chiqa/section2answer_single_abstractive |
+| TAC 2009 | `tac/2009` |
+| TAC 2010 | `tac/2010` |
+| DUC 2004 | `duc/2004` |
+| DUC 2007 | `duc/2007` |
+
+
