@@ -1,4 +1,4 @@
-#Zero-shot Learning (ZSL) for consumer health answer summarization
+# Zero-shot Learning (ZSL) for consumer health answer summarization
 
 To install related dependencies:
 pip install -r requirements.txt
@@ -38,6 +38,7 @@ To do adaptive mixing set `--dynamic_mixing=True`
 To do self-adaptive mixing set `--dynamic_mixing=True --mix_from_validation=False`
 
 To do testing only:
+```bash
 python -m fslks.run_experiment \
                 --testing_tasks=\"chiqa/section2answer_single_extractive duc/2004 duc/2007 tac/2009 tac/2010\" \
                 --do_predict=True \
