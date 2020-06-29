@@ -25,7 +25,7 @@ TaskSplitPredictions = typing.MutableMapping[str, typing.Union[typing.Sequence[t
 TaskPredictions = typing.MutableMapping[typing.Union[tfds.Split, str], typing.Callable[[], TaskSplitPredictions]]
 Predictions = typing.MutableMapping[str, TaskPredictions]
 
-LOG_EXAMPLES: int = 1
+LOG_EXAMPLES: int = 10
 
 
 def concatenate(datasets: typing.Iterable[tf.data.Dataset]):

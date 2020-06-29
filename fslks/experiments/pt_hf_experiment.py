@@ -204,6 +204,7 @@ class PTExperiment(Experiment[transformers.PreTrainedModel]):
             training_data.append(dataset)
             _, info = Task.get_or_load_dataset(task.dataset)
             dataset_sizes.append(info.splits[task.split].num_examples)
+            logging.debug('Loaded %d examples for %s', info.splits[task.split].num_examples, task)
         return training_data, np.array(dataset_sizes)
 
     def train(self,

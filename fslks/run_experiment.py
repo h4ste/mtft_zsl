@@ -32,18 +32,18 @@ flags.DEFINE_spaceseplist("training_tasks", [], "One or more tasks to be used fo
 flags.DEFINE_spaceseplist("validation_tasks", [], "One or more tasks to be used for validation during pretraining")
 flags.DEFINE_spaceseplist("testing_tasks", [], "One or more tasks to be used for evaluating pretrained models")
 
-flags.DEFINE_integer('num_epochs', 3, 'Number of epochs to train')
+flags.DEFINE_integer('num_epochs', 10, 'Number of epochs to train')
 flags.DEFINE_integer('warmup_epochs', 3, 'Number of warmup epochs before normal training')
-flags.DEFINE_integer('batch_size', 16, 'Batch size to use for training')
+flags.DEFINE_integer('batch_size', 8, 'Batch size to use for training')
 flags.DEFINE_integer('prefetch_size', -1, 'Number of batches to prefetch (default: AUTOTUNE)')
-flags.DEFINE_integer('eval_batch_size', 16, 'Batch size to use when evaluating validation/test sets')
-flags.DEFINE_integer('eval_batches', None, 'Number of batches to evaluate when testing')
+flags.DEFINE_integer('eval_batch_size', 8, 'Batch size to use when evaluating validation/test sets')
+flags.DEFINE_integer('eval_batches', 10, 'Number of batches to evaluate when testing')
 flags.DEFINE_boolean('use_xla', False, 'Enable XLA optimization')
 flags.DEFINE_boolean('use_amp', False, 'Enable AMP optimization')
 flags.DEFINE_boolean('do_train', False, 'Train and validate the specified model')
 flags.DEFINE_boolean('do_predict', False, 'Save (trained) model predictions model')
 flags.DEFINE_boolean('do_test', False, 'Evaluate the performance of a (trained) model')
-flags.DEFINE_integer('max_seq_len', 128, 'Maximum sequence length')
+flags.DEFINE_integer('max_seq_len', 512, 'Maximum sequence length')
 flags.DEFINE_string('init_checkpoint', 't5-base', 'Name of pretrained transformer model to load')
 flags.DEFINE_string('checkpoint_dir', None, 'Path to save checkpoints')
 flags.DEFINE_string('prediction_dir', None, 'Path to save/load predictions')
@@ -52,11 +52,11 @@ flags.DEFINE_string('cache_dir', None, 'Path to save TensorFlow DataSet cache fi
 flags.DEFINE_string('checksum_dir', '/data/LHC_kitchensink/tensorflow_datasets/url_checksums',
                     help='Path to checksum directory')
 flags.DEFINE_integer('steps_per_epoch', 1000, 'Number of steps considered as an epoch')
-flags.DEFINE_enum('implementation', default='tensorflow', enum_values=['tensorflow', 'pytorch'],
+flags.DEFINE_enum('implementation', default='pytorch', enum_values=['tensorflow', 'pytorch'],
                   help='implementation to use for huggingface models')
 flags.DEFINE_enum('evaluation', default='basic', enum_values=['basic', 'nlg'],
                   help='method to use for evaluating model performance')
-flags.DEFINE_integer('seed', default=None, help='Random seed used for experiments')
+flags.DEFINE_integer('seed', default=1337, help='Random seed used for experiments')
 flags.DEFINE_float('temperature', default=2., help='Temperature used for task mixing')
 flags.DEFINE_boolean('dynamic_mixing', default=False,
                      help='Whether to turn on dynamic task mixing based on validation losses')
