@@ -14,24 +14,75 @@ for single document summarization.
 _CITATION ="""https://www.cochranelibrary.com/cdsr/reviews"""
 
 _COCHRANE_DOWNLOAD_INSTRUCTIONS = """Export the citations available at https://www.cochranelibrary.com/cdsr/reviews
-and use the provided urls to collect the body of the text and the plain-language summary"""
+(for reviews) or https://www.cochranelibrary.com/cca (for clinical question-answering)
+and use the provided urls to collect either the body of the text and the plain-language summary,
+or the clinical questions and answers. Importantly, the QA pairs can be mapped to individual reviews used to create the answers.
+
+Note that there is a known bug in the export feature of the cochrane database, 
+which prevents the user from downloading more than ~4000-5000 articles
+"""
+
+
+class CochraneConfig(tfds.core.BuilderConfig):
+    """Builder config for Cochrane"""
+
+    @tfds.core.disallow_positional_args
+    def __init__(self,
+                 **kwargs):
+        """Config for Cochrane.
+
+        Args:
+          **kwargs: keyword arguments forwarded to super.
+        """
+        super(CochraneConfig, self).__init__(
+            version=tfds.core.Version(
+                "1.0.0"),
+            supported_versions=[
+                tfds.core.Version(
+                    "1.0.0"),
+            ],
+            **kwargs)
 
 
 class CochraneSumm(tfds.core.GeneratorBasedBuilder):
-    """Cochrane plain language summarization dataset builder"""
+    """Cochrane Plain-Language Summarization and QA dataset builder"""
 
     VERSION = tfds.core.Version("1.0.0")
     MANUAL_DOWNLOAD_INSTRUCTIONS = _COCHRANE_DOWNLOAD_INSTRUCTIONS
 
+    BUILDER_CONFIGS = [
+            CochraneConfig(
+                name="clinical_answer",
+                description="Cochrane clinical question answering dataset"),
+            CochraneConfig(
+                name="summary",
+                description="Cochrane summarization dataset"),
+            ]
+
     def _info(self):
+
+        if self.builder_config.name == "clinical_answer":
+            feature_dict = tfds.features.FeaturesDict({
+                'question': tfds.features.Text(),
+                'answer': tfds.features.Text(),
+                'article': tfds.features.Text(),
+                })
+            data_keys = ('article', 'answer')
+        elif self.builder_config.name == "summary":
+            feature_dict = tfds.features.FeaturesDict({
+                'summary': tfds.features.Text(),
+                'article': tfds.features.Text(),
+                })
+            data_keys = ('article', 'summary')
+        else:
+            # Handle dataset names here
+            raise IOError("Unknown dataset name. Please specify one of 'clinical_answer' or 'summary' for valid Cochrane dataset")
+            
         return tfds.core.DatasetInfo(
             builder=self,
             description=_DESCRIPTION,
-            features=tfds.features.FeaturesDict({
-                'summary': tfds.features.Text(),
-                'article': tfds.features.Text(),
-                }),
-            supervised_keys=('article', 'summary'),
+            features=feature_dict,
+            supervised_keys=data_keys,
             citation=_CITATION
         )
 
@@ -42,25 +93,36 @@ class CochraneSumm(tfds.core.GeneratorBasedBuilder):
             tfds.core.SplitGenerator(
                 name=tfds.Split.TRAIN,
                 gen_kwargs={
-                    "path": os.path.join(path, "cochrane_summary_train_collection.json")}),
+                    "path": os.path.join(path, "cochrane_{}_train_collection.json".format(self.builder_config.name))}),
             tfds.core.SplitGenerator(
                 name=tfds.Split.VALIDATION,
                 gen_kwargs={
-                    "path": os.path.join(path, "cochrane_summary_val_collection.json")}),
+                    "path": os.path.join(path, "cochrane_{}_val_collection.json".format(self.builder_config.name))}),
             tfds.core.SplitGenerator(
                 name=tfds.Split.TEST,
                 gen_kwargs={
-                    "path": os.path.join(path, "cochrane_summary_test_collection.json")}),
+                    "path": os.path.join(path, "cochrane_{}_test_collection.json".format(self.builder_config.name))}),
         ]
 
     def _generate_examples(self, path):
         """Parse and yield cochrane summaries"""
         with tf.io.gfile.GFile(path) as f:
             data = json.load(f)
-            for i, key in enumerate(data):
-                summary = data[key]['summary']
-                article = data[key]['article']
-                yield i, {
-                    'summary': summary,
-                    'article': article,
-                }
+            if self.builder_config.name == "summary":
+                for i, key in enumerate(data):
+                    summary = data[key]['summary']
+                    article = data[key]['article']
+                    yield i, {
+                        'summary': summary,
+                        'article': article,
+                    }
+            else: 
+                for i, key in enumerate(data):
+                    answer = data[key]['answer']
+                    article = data[key]['article']
+                    question = data[key]['question']
+                    yield i, {
+                        'answer': answer,
+                        'article': article,
+                        'question': question,
+                    }
