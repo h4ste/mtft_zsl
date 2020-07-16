@@ -164,7 +164,7 @@ def register_task_mappings():
                   ]),
                   target=sink.Feature('summary'))
 
-    sink.register('cochrane_summ/summary',
+    sink.register('cochrane/summary',
                   input=sink.Join([
                       sink.Constant('cochrane summary'),
                       sink.Constant('summarize:'),
@@ -172,7 +172,7 @@ def register_task_mappings():
                   ]),
                   target=sink.Feature('summary'))
 
-    sink.register('cochrane_summ/clinical_answer',
+    sink.register('cochrane/clinical_answer',
                   input=sink.Join([
                       sink.Constant('cochrane question'),
                       sink.Constant('question:'),
