@@ -12,6 +12,7 @@ faulthandler.register(signal.SIGUSR1)
 import numpy as np
 
 import gorilla
+import tqdm
 
 from fslks.experiments import Predictions, Task
 
@@ -129,6 +130,9 @@ def main(argv):
 
     logging.set_verbosity(logging.DEBUG)
 
+    # Disable TQDM threading (solves a weird C runtime error)
+    tqdm.tqdm.monitor_interval = 0
+
     if FLAGS.do_train or FLAGS.do_predict or (FLAGS.do_test and not FLAGS.prediction_dir):
         experiment: experiments.Experiment
         if FLAGS.implementation == 'tensorflow':
@@ -227,16 +231,17 @@ def main(argv):
             # Save final checkpoint
             experiment.save_model(model, FLAGS.checkpoint_dir)
 
+        if FLAGS.do_predict or (FLAGS.do_test and not FLAGS.prediction_dir):
+            # Reload model, using best checkpoint if available.
+            # Otherwise use the existing model.
+            model_dir = "{0}_best".format(FLAGS.checkpoint_dir)
+            if os.path.isdir(model_dir):
+                logging.info("Loading best performing checkpoint: %s" % (model_dir))
+                model = experiment.load_model(model_name=model_dir)
+
     if FLAGS.do_predict:
         # Evaluate the model
         testing_tasks = Task.parse_test_tasks(FLAGS.testing_tasks)
-        # Reload model, using best checkpoint if available.
-        # Otherwise use the existing model.
-        model_dir = "{0}_best".format(FLAGS.checkpoint_dir)
-        if os.path.isdir(model_dir):
-            logging.info("Loading best performing checkpoint: %s" % (model_dir))
-            experiment.load_model(model_name=model_dir)
-
         logging.info('Predicting %s with %s...', ' '.join(FLAGS.testing_tasks), FLAGS.init_checkpoint)
 
         predictions = experiment.predict(model,
