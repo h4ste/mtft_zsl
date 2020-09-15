@@ -6,5 +6,5 @@ from .medinfo import Medinfo
 from .ebm import EBM
 from .pubmed import PubmedSumm
 from .chiqa import Chiqa
-from .cochrane_summ import CochraneSumm
+from .cochrane import Cochrane
 from .tac import Tac

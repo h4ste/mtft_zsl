@@ -10,9 +10,9 @@ import tensorflow_datasets.public_api as tfds
 _DESCRIPTION = """The MedlinePlus multi-document reference summarization dataset, built using articles at available in in the Start Here and Learn More sections in the xml at https://medlineplus.gov/xml.html. The urls for these articles obtained from the XML and the articles were then crawled from the web
 """
 
-_CITATION = """This work is 100% plagiarized"""
+_CITATION = """https://medlineplus.gov/healthtopics.html"""
 
-_MEDLINEPLUS_REF_DOWNLOAD_INSTRUCTIONS = """Do stuff here. Or don't. Who cares."""
+_MEDLINEPLUS_REF_DOWNLOAD_INSTRUCTIONS = """Summaries and reference links available at https://medlineplus.gov/healthtopics.html"""
 
 
 class MedlineplusReferences(tfds.core.GeneratorBasedBuilder):

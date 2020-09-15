@@ -8,7 +8,24 @@ import tensorflow_datasets.public_api as tfds
 
 _DESCRIPTION = """Evidence-based Medicine dataset for multi-document summarization, available at https://sourceforge.net/projects/ebmsumcorpus/"""
 
-_CITATION = """This work is 100% plagiarized"""
+_CITATION = """@inproceedings{nye-etal-2018-corpus,
+    title = "A Corpus with Multi-Level Annotations of Patients, Interventions and Outcomes to Support Language Processing for Medical Literature",
+    author = "Nye, Benjamin  and
+      Li, Junyi Jessy  and
+      Patel, Roma  and
+      Yang, Yinfei  and
+      Marshall, Iain  and
+      Nenkova, Ani  and
+      Wallace, Byron",
+    booktitle = "Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
+    month = jul,
+    year = "2018",
+    address = "Melbourne, Australia",
+    publisher = "Association for Computational Linguistics",
+    url = "https://www.aclweb.org/anthology/P18-1019",
+    doi = "10.18653/v1/P18-1019",
+    pages = "197--207",
+}"""
 
 _EBM_DOWNLOAD_INSTRUCTIONS = """Download the Evidence-based-medicine dataset from https://sourceforge.net/projects/ebmsumcorpus/ and run the provided pre-processing script."""
 

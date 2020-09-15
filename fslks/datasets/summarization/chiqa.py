@@ -1,5 +1,5 @@
 """
-Module to create MEDIQA-Answer Summarization for Consumer Health Information Question Answering tensorflow dataset. 
+Module to create MEDIQA-Answer Summarization dataset for tensorflow datasets
 """
 import os
 import json
@@ -12,9 +12,15 @@ Supports eight summarization tasks including abstract and extractive, long docum
 short document, and multi and single document. See README at OSF url for further details.
 """
 
-_CITATION = """This work is 100% plagiarized"""
+_CITATION = """@misc{savery2020mediqa,
+    author={Max Savery and Asma {Ben Abacha} and Soumya Gayen and Demner{-}Fushman},
+    title={Question-Driven Summarization of Answers to Consumer Health Questions},
+    year={2020},
+    howpublished={https://doi.org/10.17605/OSF.IO/FYG46}
+}"""
 
-_MEDIQA_ANS_DOWNLOAD_INSTRUCTIONS = """Temp until upload""" 
+_MEDIQA_ANS_DOWNLOAD_INSTRUCTIONS = """Download the datasets from https://doi.org/10.17605/OSF.IO/FYG46 
+and place in the tensorflow datasets download/manual directory under chiqa/*.json""" 
 
 
 class ChiqaConfig(tfds.core.BuilderConfig):
