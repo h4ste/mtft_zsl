@@ -3,13 +3,26 @@ Script to process DUC summarization data for duc.py dataset builder.
 The script will generate various intermediate data files, 
 including separate files for the human summaries, topics, and original documents. The final collections will be saved in processed_duc/duc<year>/duc_collection_<year>.json
 
-Access rights to the original DUC data must be granted by NIST. This script will process only the 2004 and 2007 data. Place the data you receive from NIST (unpacking any .tgz first) in a parent directory named duc_<year>. This script requires a duc_2004 directory and a duc_2007 directory, both of these containing the respective files from NIST.
+Access rights to the original DUC data must be granted by NIST. This script will process only the 2004 and 2007 data. Place the data you receive from NIST (unpacking any .tgz first, as well as any nested .tgz, as will be the case for the DUC 2007 summarization documents) in the same parent directory for both years. For DUC 2007, these files will include duc2007_topics.sgml, mainEval.tar.gz, and DUC2007_Summarization_documents.tgz. For DUC 2004, this will include duc2004_results.tgz and DUC2004_Summarization_Documents.tgz.  
+
+Note that for DUC 2004, you will have to go into /duc2004_results/ROUGE and unpack duc2004.task1.ROUGE.models.tar.gz.
 
 To run the script
-python process_duc.py --path=/path/to/directory
+python process_duc.py --path=/path/to/<directory with duc data>
 For example
 python process_duc.py --path=/home/data/DUC
-where DUC will contain the directories for each year of DUC in format duc_<year>.
+where DUC will contain the unpacked files listed above.
+
+If the script runs sucessfully you should see this print output:
+Processing duc 2004
+Source document total: 489
+Summ total 489
+Total collection: 489
+Processing duc 2007
+Source document total: 1124
+Summ total 45
+Doc-topic total 1125
+Total collection: 180
 """
 
 import json
@@ -50,9 +63,6 @@ class DocProcessor():
                 try:
                     with open(duc_doc, "r") as f:
                         soup = BeautifulSoup(f, features="lxml")
-                except le.XMLSyntaxError as e: 
-                    print("XML error", e)
-                    continue
                 except Exception as e:
                     print(e)
                     continue
@@ -83,7 +93,7 @@ class DUC2004(DocProcessor):
 
     def parse_summs(self):
         # Just parse the summaries for the first task
-        duc_path = os.path.join(self.path, "duc_2004/duc2004_results/eval/models/1/*")
+        duc_path = os.path.join(self.path, "duc2004_results/ROUGE/eval/models/1/*")
         summ_dict = {}
         for duc_summ in glob.iglob(duc_path):
             split_duc = duc_summ.split("/")[-1].split(".")
@@ -109,9 +119,6 @@ class DUC2004(DocProcessor):
                 duc_collection[doc_id] = {}
                 duc_collection[doc_id]['document'] = duc_docs[doc_id]
                 duc_collection[doc_id]['summary'] = duc_summs[doc_id]
-            elif doc_id in doc_dict:
-                print("DUC DOC already deposited in dict!:", doc_id)
-                print(doc_id)
         
         print("Total collection:", len(duc_collection))
         self.save_duc(duc_collection, "collection")
@@ -125,7 +132,7 @@ class DUC2007(DocProcessor):
 
     def parse_summs(self):
         """Parse out the human generated summaries for the topics"""
-        duc_path = os.path.join(self.path, "duc_2007/mainEval/ROUGE/models/*")
+        duc_path = os.path.join(self.path, "mainEval/ROUGE/models/*")
         summ_dict = {}
         for duc_summ in glob.iglob(duc_path):
             split_duc = duc_summ.split("/")[-1].split(".")
@@ -149,11 +156,12 @@ class DUC2007(DocProcessor):
 
     def parse_topics(self):
         """Parse the topics"""
-        topic_path = os.path.join(self.path, "duc_2007/duc2007_topics.sgml")
-        tree = le.parse(topic_path)
-        root = tree.getroot()
+        topic_path = os.path.join(self.path, "duc2007_topics.sgml")
+
+        with open(topic_path, "r") as f:
+            soup = BeautifulSoup(f, "lxml")
         doc_dict = {}
-        for topic in root.findall("topic"):
+        for topic in soup.find_all("topic"):
             topic_id = topic.find("num").text.strip()
             topic_statement = topic.find("narr").text.strip()
             topic_docs = topic.find("docs").text.strip().split("\n")
@@ -288,9 +296,9 @@ def main_processor():
         os.makedirs("./processed_duc/duc_{}".format(duc_year), exist_ok=True)
         if duc_year == "2004":
             processor = DUC2004(duc_year, args.path)
-            duc_path = os.path.join(args.path, "duc_2004/DUC2004_Summarization_Documents/duc2004_testdata/tasks1and2/duc2004_tasks1and2_docs/docs/*")
+            duc_path = os.path.join(args.path, "DUC2004_Summarization_Documents/duc2004_testdata/tasks1and2/duc2004_tasks1and2_docs/docs/*")
         if duc_year == "2007":
-            duc_path = os.path.join(args.path, "duc_2007/DUC2007_Summarization_Documents/duc2007_testdocs/main/*")
+            duc_path = os.path.join(args.path, "DUC2007_Summarization_Documents/duc2007_testdocs/main/*")
             processor = DUC2007(duc_year, args.path)
         processor.parse_docs(duc_path)
         processor.parse_summs()
