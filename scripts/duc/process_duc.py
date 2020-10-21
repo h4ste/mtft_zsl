@@ -1,7 +1,7 @@
 """
-Script to process DUC summarization data for duc.py dataset builder.
+Script to process DUC summarization data for fslks duc.py dataset builder.
 The script will generate various intermediate data files, 
-including separate files for the human summaries, topics, and original documents. The final collections will be saved in processed_duc/duc<year>/duc_collection_<year>.json
+including separate files for the human summaries, topics, and original documents. The final collections will be saved in processed_duc/duc<year>/duc_<year>_test_collection.json
 
 Access rights to the original DUC data must be granted by NIST. This script will process only the 2004 and 2007 data. Place the data you receive from NIST (unpacking any .tgz first, as well as any nested .tgz, as will be the case for the DUC 2007 summarization documents) in the same parent directory for both years. For DUC 2007, these files will include duc2007_topics.sgml, mainEval.tar.gz, and DUC2007_Summarization_documents.tgz. For DUC 2004, this will include duc2004_results.tgz and DUC2004_Summarization_Documents.tgz.  
 
@@ -81,7 +81,7 @@ class DocProcessor():
 
     def save_duc(self, duc_docs, doc_type):
         """Save docs to json"""
-        with open("processed_duc/duc_{y}/duc_{d}_{y}.json".format(d=doc_type, y=self.duc_year), "w") as f:
+        with open("processed_duc/duc_{y}/duc_{y}_{d}.json".format(y=self.duc_year, d=doc_type), "w") as f:
             json.dump(duc_docs, f, indent=4)
 
 
@@ -93,9 +93,11 @@ class DUC2004(DocProcessor):
 
     def parse_summs(self):
         # Just parse the summaries for the first task
-        duc_path = os.path.join(self.path, "duc2004_results/ROUGE/eval/models/1/*")
+        duc_manual_summs = os.path.join(self.path, "duc2004_results/ROUGE/eval/models/1")
+        if not os.path.exists(duc_manual_summs):
+            raise IOError("The path {} to the DUC 2004 manual summaries does not exist. Please check duc2004_results/ROUGE/eval in the unpacked DUC data and make sure the eval dir is nested within ROUGE.".format(duc_manual_summs))
         summ_dict = {}
-        for duc_summ in glob.iglob(duc_path):
+        for duc_summ in glob.iglob("{}/*".format(duc_manual_summs)):
             split_duc = duc_summ.split("/")[-1].split(".")
             doc_id = ".".join(split_duc[-2:])
             with open(duc_summ, "r") as f:
@@ -109,9 +111,9 @@ class DUC2004(DocProcessor):
         """Combine single doc summaries with their documents"""
         duc_doc_path = "processed_duc/duc_2004/duc"
         duc_collection = {}
-        with open("{0}_summs_2004.json".format(duc_doc_path), "r") as f:
+        with open("{0}_2004_summs.json".format(duc_doc_path), "r") as f:
             duc_summs = json.load(f)
-        with open("{0}_docs_2004.json".format(duc_doc_path), "r") as f:
+        with open("{0}_2004_docs.json".format(duc_doc_path), "r") as f:
             duc_docs = json.load(f)
         # Parse the jsons!
         for doc_id in duc_docs: 
@@ -121,7 +123,7 @@ class DUC2004(DocProcessor):
                 duc_collection[doc_id]['summary'] = duc_summs[doc_id]
         
         print("Total collection:", len(duc_collection))
-        self.save_duc(duc_collection, "collection")
+        self.save_duc(duc_collection, "test_collection")
 
 
 class DUC2007(DocProcessor):
@@ -132,9 +134,11 @@ class DUC2007(DocProcessor):
 
     def parse_summs(self):
         """Parse out the human generated summaries for the topics"""
-        duc_path = os.path.join(self.path, "mainEval/ROUGE/models/*")
+        duc_manual_summs = os.path.join(self.path, "mainEval/ROUGE/models")
+        if not os.path.exists(duc_manual_summs):
+            raise IOError("The path {} to the DUC 2007 manual summaries does not exist. Please check mainEval/ROUGE/models in the unpacked DUC data to make sure these directories exist.".format(duc_manual_summs))
         summ_dict = {}
-        for duc_summ in glob.iglob(duc_path):
+        for duc_summ in glob.iglob("{}/*".format(duc_manual_summs)):
             split_duc = duc_summ.split("/")[-1].split(".")
             topic_id = split_duc[0]
             summ_id = split_duc[-1]
@@ -169,31 +173,6 @@ class DUC2007(DocProcessor):
                 doc_dict[topic_doc] = {'topic_id': topic_id, 'question': topic_statement}
         print("Doc-topic total", len(doc_dict))
         self.save_duc(doc_dict, "topics")
-
-    def combine(self):
-        """Combine summaries with their documents"""
-        duc_doc_path = "processed_duc/duc_2007/duc"
-        duc_collection = {}
-        with open("{0}_summs_2007.json".format(duc_doc_path), "r") as f:
-            duc_summs = json.load(f)
-        with open("{0}_docs_2007.json".format(duc_doc_path), "r") as f:
-            duc_docs = json.load(f)
-        with open("{0}_topics_2007.json".format(duc_doc_path), "r") as f:
-            duc_topics = json.load(f)
-        # Parse the jsons!
-        for doc_id in duc_docs: 
-            if doc_id not in duc_collection:
-                duc_collection[doc_id] = {}
-                # The topic id will have a last letter indicating which annotator selected the documents for that topic. 
-                # However, this key in the summaries does not have this final letter.
-                topic_id = duc_topics[doc_id]['topic_id']
-                duc_collection[doc_id]['topic'] = topic_id
-                duc_collection[doc_id]['document'] = duc_docs[doc_id]
-                duc_collection[doc_id]['question'] = duc_topics[doc_id]['question']
-                duc_collection[doc_id]['summaries'] = duc_summs[topic_id[:-1]]
-
-        print("Total collection:", len(duc_collection))
-        self.save_duc(duc_collection, "collection")
 
     def remove_token(self, sentence):
         """Remove one token from the sentence"""
@@ -259,11 +238,11 @@ class DUC2007(DocProcessor):
         in the order in which they are provided in the json file for each summ.
         """
         duc_doc_path = "processed_duc/duc_2007/duc"
-        with open("{0}_summs_2007.json".format(duc_doc_path), "r") as f:
+        with open("{0}_2007_summs.json".format(duc_doc_path), "r") as f:
             duc_summs = json.load(f)
-        with open("{0}_docs_2007.json".format(duc_doc_path), "r") as f:
+        with open("{0}_2007_docs.json".format(duc_doc_path), "r") as f:
             duc_docs = json.load(f)
-        with open("{0}_topics_2007.json".format(duc_doc_path), "r") as f:
+        with open("{0}_2007_topics.json".format(duc_doc_path), "r") as f:
             duc_topics = json.load(f)
         # Parse the jsons!
         multi_doc_dict = {}
@@ -284,7 +263,7 @@ class DUC2007(DocProcessor):
         print("Total collection:", 4*len(multi_doc_dict))
         for topic in multi_doc_dict:
             assert len(multi_doc_dict[topic]) == 2
-        self.save_duc(multi_doc_dict, "collection")
+        self.save_duc(multi_doc_dict, "test_collection")
 
 
 def main_processor():
@@ -297,7 +276,7 @@ def main_processor():
         if duc_year == "2004":
             processor = DUC2004(duc_year, args.path)
             duc_path = os.path.join(args.path, "DUC2004_Summarization_Documents/duc2004_testdata/tasks1and2/duc2004_tasks1and2_docs/docs/*")
-        if duc_year == "2007":
+        elif duc_year == "2007":
             duc_path = os.path.join(args.path, "DUC2007_Summarization_Documents/duc2007_testdocs/main/*")
             processor = DUC2007(duc_year, args.path)
         processor.parse_docs(duc_path)
@@ -306,7 +285,6 @@ def main_processor():
             processor.combine()
         elif duc_year == "2007":
             processor.parse_topics()
-            # Method to approximate order the summaries by ngram comparison
             processor.make_multi_doc_collection()
 
         
