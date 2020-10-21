@@ -1,9 +1,14 @@
 """
 Script to process DUC summarization data for fslks duc.py dataset builder.
 The script will generate various intermediate data files, 
-including separate files for the human summaries, topics, and original documents. The final collections will be saved in processed_duc/duc<year>/duc_<year>_test_collection.json
+including separate files for the human summaries, topics, and original documents. 
+The final collections will be saved in processed_duc/duc<year>/duc_<year>_test_collection.json
 
-Access rights to the original DUC data must be granted by NIST. This script will process only the 2004 and 2007 data. Place the data you receive from NIST (unpacking any .tgz first, as well as any nested .tgz, as will be the case for the DUC 2007 summarization documents) in the same parent directory for both years. For DUC 2007, these files will include duc2007_topics.sgml, mainEval.tar.gz, and DUC2007_Summarization_documents.tgz. For DUC 2004, this will include duc2004_results.tgz and DUC2004_Summarization_Documents.tgz.  
+Access rights to the original DUC data must be granted by NIST. This script will process only the 2004 and 2007 data. 
+Place the data you receive from NIST (unpacking any .tgz first, as well as any nested .tgz, 
+as will be the case for the DUC 2007 summarization documents) in the same parent directory for both years. 
+For DUC 2007, these files will include duc2007_topics.sgml, mainEval.tar.gz, and DUC2007_Summarization_documents.tgz. 
+For DUC 2004, this will include duc2004_results.tgz and DUC2004_Summarization_Documents.tgz.  
 
 Note that for DUC 2004, you will have to go into /duc2004_results/ROUGE and unpack duc2004.task1.ROUGE.models.tar.gz.
 
