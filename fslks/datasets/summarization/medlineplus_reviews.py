@@ -7,11 +7,16 @@ import json
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
 
-_DESCRIPTION = """The MedlinePlus multi-document review summarization dataset, built using articles at available in xml at https://medlineplus.gov/xml.html and PubMed review articles listed relevant to the article.""" 
+_DESCRIPTION = """The MedlinePlus multi-document review summarization dataset, 
+built using articles at available in xml at 
+https://medlineplus.gov/xml.html and PubMed review articles 
+listed as relevant to the article.""" 
 
 _CITATION = """https://medlineplus.gov/healthtopics.html"""
 
-_MEDLINEPLUS_REVIEW_DOWNLOAD_INSTRUCTIONS = """Summaries available at https://medlineplus.gov/healthtopics.html. PubMed query used to collect the reviews is available in medlineplus xml"""
+_MEDLINEPLUS_REVIEW_DOWNLOAD_INSTRUCTIONS = """Summaries available 
+at https://medlineplus.gov/healthtopics.html. 
+PubMed query used to collect the reviews is available in medlineplus xml"""
 
 class MedlineplusReviews(tfds.core.GeneratorBasedBuilder):
     """MedlinePlus review summarization dataset builder"""

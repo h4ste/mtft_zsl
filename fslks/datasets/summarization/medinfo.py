@@ -7,8 +7,8 @@ import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
 
 
-_DESCRIPTION = """The MedInfo single document summarization dataset, built using MedInfo collection
-available from https://github.com/abachaa/Medication_QA_MedInfo2019.
+_DESCRIPTION = """The MedInfo single document summarization dataset, built using MedInfo collection available from 
+https://github.com/abachaa/Medication_QA_MedInfo2019.
 """
 
 _CITATION = """@inproceedings{BenAbacha:MEDINFO19, 
@@ -20,7 +20,7 @@ _CITATION = """@inproceedings{BenAbacha:MEDINFO19,
     }
 """
 
-_MEDINFO_DOWNLOAD_INSTRUCTIONS = """Link to medinfo and provide processing script? Or link to my github where I've done the article scraping, etc"""
+_MEDINFO_DOWNLOAD_INSTRUCTIONS = """The preprocessed data is available at https://bionlp.nlm.nih.gov"""
 
 
 class Medinfo(tfds.core.GeneratorBasedBuilder):

@@ -16,10 +16,12 @@ _CITATION = """@article {tsatsaronis2015bioasq,
     pages = {138},
     doi = {10.1186/s12859-015-0564-6},
     url = {http://www.biomedcentral.com/content/pdf/s12859-015-0564-6.pdf},
-    author = {Tsatsaronis, George and Balikas, Georgios and Malakasiotis, Prodromos and Partalas, Ioannis and Zschunke, Matthias and Alvers, Michael R and Weissenborn, Dirk and Krithara, Anastasia and Petridis, Sergios and Polychronopoulos, Dimitris and Almirantis, Yannis and Pavlopoulos, John and Baskiotis, Nicolas and Gallinari, Patrick and Artieres, Thierry and Ngonga, Axel and Heino, Norman and Gaussier, Eric and Barrio-Alvers, Liliana and Schroeder, Michael and Androutsopoulos, Ion and Paliouras, Georgios}
+    author = {Tsatsaronis, George et al.}
 }"""
 
-_BIOASQ_DOWNLOAD_INSTRUCTIONS = """To download the BioASQ data, naviage to http://bioasq.org/. Register for an account there and download the training and test data for Task 8b.""" 
+_BIOASQ_DOWNLOAD_INSTRUCTIONS = """To download the BioASQ data, naviage to http://bioasq.org/. 
+Register for an account there and download the training 
+and test data for Task 8b.""" 
 
 
 class BioasqConfig(tfds.core.BuilderConfig):

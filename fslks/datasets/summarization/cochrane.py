@@ -41,10 +41,7 @@ _CITATION ="""https://www.cochranelibrary.com/cdsr/reviews"""
 _COCHRANE_DOWNLOAD_INSTRUCTIONS = """Export the citations available at https://www.cochranelibrary.com/cdsr/reviews
 (for reviews) or https://www.cochranelibrary.com/cca (for clinical question-answering)
 and use the provided urls to collect either the body of the text and the plain-language summary,
-or the clinical questions and answers. Importantly, the QA pairs can be mapped to individual reviews used to create the answers.
-
-Note that there is a known timeout-related bug in the export feature of the cochrane database, 
-which prevents the user from downloading more than ~4000-5000 articles, depending on the connection
+or the clinical questions and answers. Importantly, the QA pairs can be mapped to individual reviews used to create the answers. The script for processing the data in the mtft_zsl/scripts directory includes further instructions. 
 """
 
 

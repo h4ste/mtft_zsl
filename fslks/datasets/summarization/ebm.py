@@ -27,7 +27,10 @@ _CITATION = """@inproceedings{nye-etal-2018-corpus,
     pages = "197--207",
 }"""
 
-_EBM_DOWNLOAD_INSTRUCTIONS = """Download the Evidence-based-medicine dataset from https://sourceforge.net/projects/ebmsumcorpus/ and run the provided pre-processing script."""
+_EBM_DOWNLOAD_INSTRUCTIONS = """
+Download the Evidence-Based-Medicine dataset from 
+https://sourceforge.net/projects/ebmsumcorpus/.
+The preprocessed data is available at https://bionlp.nlm.nih.gov"""
 
 
 class EBMConfig(tfds.core.BuilderConfig):
