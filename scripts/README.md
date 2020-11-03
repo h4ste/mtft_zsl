@@ -1,6 +1,6 @@
 # Scripts for data processing
 
-Included in the subdirectories here are the scripts necessary to prepare the BioASQ and DUC data for the fslks package. The rest of the datasets can be download in preprocessed format and stored in the proper directory, as specified by the fslks README.
+Included in the subdirectories here are the scripts necessary to prepare the BioASQ, Cochrane, and DUC data for the fslks package. The rest of the datasets can be download in preprocessed format and stored in the proper directory, as specified by the fslks README.
 
 ## DUC  
 Request access to the Duc 2004 and 2007 data from NIST at https://duc.nist.gov/. See the process_duc.py script for further instructions about which data files to request and how to prepare them for processing. Once the script has been run, the dataset files will be named duc_2004_test_collection.json and duc_2007_test_collection.json. These are the filenames that the duc.py fslks tensorflow dataset builder expects.
@@ -15,4 +15,4 @@ Before you can use either script, you will need to download the Cochrane citatio
 
 If you check the log for the clinical answers, you may see notifications about 404 errors. This is because some of the urls in the exported citations are no longer valid. 
 
-The scripts will produce train, validation, and test sets. 
+The scripts will produce train, validation, and test sets.
