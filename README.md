@@ -1,4 +1,5 @@
 # Zero-shot Learning (ZSL) for consumer health answer summarization
+Implementation of experiments for [Towards Zero-Shot Conditional Summarization with Adaptive Multi-Task Fine-Tuning](https://aclanthology.org/2020.findings-emnlp.289) (Goodwin et al., Findings 2020).
 
 To install related dependencies:
 ```bash
